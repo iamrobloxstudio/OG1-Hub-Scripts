@@ -1,0 +1,50 @@
+-- Services
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+-- Adjust a tool's grip position (makes tools visually closer/tighter)
+local function adjustToolGrip(tool)
+    if tool:IsA("Tool") then
+        tool.GripPos = Vector3.new(0, 0, 0)
+    end
+end
+
+-- Adjust grip for all tools currently and for new ones added later
+local function adjustAllToolGrips()
+    local character = player.Character or player.CharacterAdded:Wait()
+
+    -- Adjust all existing tools
+    for _, tool in pairs(character:GetChildren()) do
+        adjustToolGrip(tool)
+    end
+    
+    -- Adjust any newly equipped tools
+    character.ChildAdded:Connect(function(child)
+        if child:IsA("Tool") then
+            adjustToolGrip(child)
+        end
+    end)
+end
+
+-- Apply grip adjustments when the character spawns
+player.CharacterAdded:Connect(function(character)
+    character:WaitForChild("HumanoidRootPart")
+    wait(1)
+    adjustAllToolGrips()
+end)
+
+-- Adjust grip if character already exists
+if player.Character then
+    adjustAllToolGrips()
+end
+
+-- Adjust grip when tools move from backpack -> character
+player.Backpack.ChildAdded:Connect(function(tool)
+    if tool:IsA("Tool") then
+        tool.AncestryChanged:Connect(function()
+            if tool.Parent == player.Character then
+                adjustToolGrip(tool)
+            end
+        end)
+    end
+end)

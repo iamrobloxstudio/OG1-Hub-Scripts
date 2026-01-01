@@ -1,0 +1,212 @@
+-- =============================================================
+-- SIGNAL SPINE (Respawn Phases)
+-- =============================================================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local folder = ReplicatedStorage:FindFirstChild("LocalSignals")
+if not folder then
+    folder = Instance.new("Folder")
+    folder.Name = "LocalSignals"
+    folder.Parent = ReplicatedStorage
+end
+
+local evt = folder:FindFirstChild("RespawnPhase")
+if not evt then
+    evt = Instance.new("BindableEvent")
+    evt.Name = "RespawnPhase"
+    evt.Parent = folder
+end
+
+--=====================================================
+-- ⚡ RTX NO-CLIP
+-- Permanent • Lightweight • Respawn-Safe
+--=====================================================
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local GuideEvent = ReplicatedStorage:FindFirstChild("Guide")
+
+----------------------------------------------------------------
+-- INTERNAL STATE
+----------------------------------------------------------------
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local Root = Character:WaitForChild("HumanoidRootPart")
+
+----------------------------------------------------------------
+-- CORE: APPLY NOCLIP
+----------------------------------------------------------------
+local function applyNoClip()
+	if not Character then return end
+
+	for _, obj in ipairs(Character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			-- NEVER touch HumanoidRootPart physics
+			if obj.Name ~= "HumanoidRootPart" then
+				obj.CanCollide = false
+				obj.Massless = true
+			else
+				obj.CanCollide = true
+				obj.Massless = false
+			end
+		end
+	end
+end
+
+-- Apply once on setup
+applyNoClip()
+
+-- Reapply only when new parts appear
+Character.DescendantAdded:Connect(function(obj)
+	if obj:IsA("BasePart") and obj.Name ~= "HumanoidRootPart" then
+		obj.CanCollide = false
+		obj.Massless = true
+	end
+end)
+
+print("⚡ RTX NO-CLIP ACTIVE")
+
+--=============================================================
+-- ⚡ ULTRA-INSTANT RESPAWN — GLASS EDITION (PHASED)
+--=============================================================
+
+-- === Local Signal ===
+local Signals = ReplicatedStorage:WaitForChild("LocalSignals")
+local RespawnPhase = Signals:WaitForChild("RespawnPhase")
+
+-- === STATE ===
+local Active = false
+local Connections = {}
+
+local function disconnectAll()
+	for _, c in ipairs(Connections) do
+		if c.Connected then c:Disconnect() end
+	end
+	table.clear(Connections)
+end
+
+local function fireRespawn()
+	if GuideEvent then
+		pcall(function() GuideEvent:FireServer() end)
+	else
+		pcall(function() LocalPlayer:LoadCharacter() end)
+	end
+end
+
+local function hookCharacter(char)
+	if not Active then return end
+	local hum = char:WaitForChild("Humanoid", 1)
+	if not hum then return end
+
+	local triggered = false
+	local function trigger()
+		if triggered then return end
+		triggered = true
+
+		RespawnPhase:Fire("Dying")
+
+		task.defer(function()
+			fireRespawn()
+			RespawnPhase:Fire("Respawning")
+		end)
+	end
+
+	table.insert(Connections, hum.HealthChanged:Connect(function(hp)
+		if hp <= 1 then trigger() end
+	end))
+
+	table.insert(Connections, hum.Died:Connect(trigger))
+
+	table.insert(Connections, hum.StateChanged:Connect(function(_, s)
+		if s == Enum.HumanoidStateType.Dead
+		or s == Enum.HumanoidStateType.Physics
+		or s == Enum.HumanoidStateType.None then
+			trigger()
+		end
+	end))
+
+	table.insert(Connections, char.AncestryChanged:Connect(function(_, p)
+		if not p then trigger() end
+	end))
+end
+
+-- === ENABLE / DISABLE ===
+local function enable()
+	if Active then return end
+	Active = true
+	disconnectAll()
+
+	table.insert(Connections,
+		LocalPlayer.CharacterAdded:Connect(function(c)
+			hookCharacter(c)
+			RespawnPhase:Fire("Stabilized")
+		end)
+	)
+
+	if LocalPlayer.Character then
+		hookCharacter(LocalPlayer.Character)
+	end
+end
+
+local function disable()
+	if not Active then return end
+	Active = false
+	disconnectAll()
+end
+
+-- === GLASS UI ===
+local gui = Instance.new("ScreenGui")
+gui.Name = "UltraRespawnGlass"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer.PlayerGui
+
+local panel = Instance.new("Frame", gui)
+panel.Size = UDim2.fromOffset(200, 60)
+panel.Position = UDim2.fromScale(0.5, 0.85)
+panel.AnchorPoint = Vector2.new(0.5, 0.5)
+panel.BackgroundColor3 = Color3.fromRGB(20, 20, 26)
+panel.BackgroundTransparency = 0.15
+panel.Active = true
+panel.Draggable = true
+
+Instance.new("UICorner", panel).CornerRadius = UDim.new(0, 18)
+
+local stroke = Instance.new("UIStroke", panel)
+stroke.Color = Color3.fromRGB(255, 70, 70)
+stroke.Thickness = 1.4
+stroke.Transparency = 0.2
+
+local btn = Instance.new("TextButton", panel)
+btn.Size = UDim2.fromScale(1,1)
+btn.BackgroundTransparency = 1
+btn.Text = "RESPAWN: OFF"
+btn.Font = Enum.Font.GothamBold
+btn.TextSize = 16
+btn.TextColor3 = Color3.fromRGB(240,240,240)
+
+local function refresh()
+	btn.Text = Active and "RESPAWN: ON" or "RESPAWN: OFF"
+	TweenService:Create(stroke, TweenInfo.new(0.25),
+		{Transparency = Active and 0 or 0.4}
+	):Play()
+end
+
+btn.MouseButton1Click:Connect(function()
+	if Active then disable() else enable() end
+	refresh()
+end)
+
+UIS.InputBegan:Connect(function(i,g)
+	if g then return end
+	if i.KeyCode == Enum.KeyCode.R then
+		if Active then disable() else enable() end
+		refresh()
+	end
+end)
+
+refresh()
+print("⚡ ULTRA RESPAWN (PHASED) READY")
+return evt

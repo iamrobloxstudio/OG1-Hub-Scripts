@@ -1,0 +1,132 @@
+-- ⚡ ULTRA FLOAT TOOLS — MAX FLOAT + MICRO BURST ⚡
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local lp = Players.LocalPlayer
+
+-- CONFIG
+local FLOAT_RANGE = 15
+local FAR_POSITION = Vector3.new(10000, 1000, 10000)
+local FLOAT_JITTER = 1
+local BURST_DAMAGE_INTERVAL = 0.05 -- micro burst interval
+
+-- UTILITIES
+local function IsDead()
+	local char = lp.Character
+	if not char then return false end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	return hum and hum.Health <= 0
+end
+
+local function GetHandle(tool)
+	return tool:FindFirstChild("Handle")
+end
+
+local function SetZeroGravity(tool)
+	local handle = GetHandle(tool)
+	if not handle then return end
+	local bv = handle:FindFirstChildOfClass("BodyVelocity")
+	if not bv then
+		bv = Instance.new("BodyVelocity")
+		bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
+		bv.Velocity = Vector3.new(0, 0, 0)
+		bv.Parent = handle
+	end
+end
+
+local function RestoreGravity(tool)
+	local handle = GetHandle(tool)
+	if handle then
+		local bv = handle:FindFirstChildOfClass("BodyVelocity")
+		if bv then bv:Destroy() end
+	end
+end
+
+local function TeleportTool(tool, position)
+	local handle = GetHandle(tool)
+	if handle then
+		handle.CFrame = CFrame.new(position + Vector3.new(
+			math.random(-FLOAT_JITTER, FLOAT_JITTER),
+			FLOAT_JITTER,
+			math.random(-FLOAT_JITTER, FLOAT_JITTER)
+		))
+	end
+end
+
+local function GetClosestPlayer()
+	local closest = nil
+	local closestDist = FLOAT_RANGE
+	local char = lp.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= lp then
+			local c = p.Character
+			local hum = c and c:FindFirstChild("Humanoid")
+			if c and hum and hum.Health > 0 then
+				local hrp = c:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					local dist = (hrp.Position - char.HumanoidRootPart.Position).Magnitude
+					if dist < closestDist then
+						closestDist = dist
+						closest = c
+					end
+				end
+			end
+		end
+	end
+
+	return closest
+end
+
+local function FollowPlayer(tool, target)
+	local handle = GetHandle(tool)
+	if handle and target and target:FindFirstChild("HumanoidRootPart") then
+		handle.CFrame = CFrame.new(target.HumanoidRootPart.Position + Vector3.new(0, 3, 0))
+	else
+		TeleportTool(tool, FAR_POSITION)
+	end
+end
+
+local function ActivateToolMicroBurst(tool)
+	task.spawn(function()
+		pcall(function()
+			tool:Activate()
+		end)
+	end)
+end
+
+-- TOOL LOOP
+RunService.Heartbeat:Connect(function()
+	local char = lp.Character
+	if not char then return end
+
+	for _, tool in ipairs(char:GetChildren()) do
+		if tool:IsA("Tool") then
+			if IsDead() then
+				SetZeroGravity(tool)
+				-- prevent void falling
+				TeleportTool(tool, FAR_POSITION)
+
+				-- follow closest player optionally
+				local target = GetClosestPlayer()
+				FollowPlayer(tool, target)
+
+				-- micro burst damage
+				ActivateToolMicroBurst(tool)
+			else
+				RestoreGravity(tool)
+			end
+		end
+	end
+end)
+
+-- RESTORE ON RESPAWN
+lp.CharacterAdded:Connect(function(char)
+	for _, tool in ipairs(char:GetChildren()) do
+		if tool:IsA("Tool") then
+			RestoreGravity(tool)
+		end
+	end
+end)

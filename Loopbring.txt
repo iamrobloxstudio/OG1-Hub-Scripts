@@ -1,0 +1,263 @@
+-- Loopbring GUI (RTX Red Glass Edition)
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+local bringTargets = {}
+local distance = 2
+
+-- ============================
+-- GUI SETUP
+-- ============================
+local gui = Instance.new("ScreenGui")
+gui.Name = "LoopbringGUI"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+-- Theme Colors
+local GLASS_BG = Color3.fromRGB(18, 18, 24)
+local RED = Color3.fromRGB(255, 70, 70)
+local TEXT = Color3.fromRGB(235, 235, 235)
+local MUTED = Color3.fromRGB(120, 120, 120)
+local ACTIVE_BG = Color3.fromRGB(45, 25, 25)
+
+local function round(obj, r)
+	Instance.new("UICorner", obj).CornerRadius = UDim.new(0, r)
+end
+
+local function stroke(obj, thickness, color, transparency)
+	local s = Instance.new("UIStroke", obj)
+	s.Thickness = thickness
+	s.Color = color or RED
+	s.Transparency = transparency or 0.2
+	return s
+end
+
+-- ============================
+-- TOGGLE BUTTON
+-- ============================
+local toggleBtn = Instance.new("TextButton", gui)
+toggleBtn.Size = UDim2.fromOffset(46, 46)
+toggleBtn.Position = UDim2.new(1, -70, 0, 120)
+toggleBtn.Text = "⇩"
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 22
+toggleBtn.BackgroundColor3 = GLASS_BG
+toggleBtn.BackgroundTransparency = 0.12
+toggleBtn.TextColor3 = TEXT
+toggleBtn.AutoButtonColor = false
+
+round(toggleBtn, 23)
+stroke(toggleBtn, 1.5, RED, 0.15)
+
+-- ============================
+-- MAIN FRAME
+-- ============================
+local frame = Instance.new("Frame", gui)
+frame.Position = UDim2.new(1, -280, 0, 170)
+frame.Size = UDim2.fromOffset(240, 280)
+frame.BackgroundColor3 = GLASS_BG
+frame.BackgroundTransparency = 0.12
+frame.Visible = false
+
+round(frame, 16)
+stroke(frame, 1.6, RED, 0.2)
+
+-- ============================
+-- HEADER
+-- ============================
+local header = Instance.new("Frame", frame)
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundTransparency = 1
+
+local minusBtn = Instance.new("TextButton", header)
+minusBtn.Size = UDim2.fromOffset(40, 32)
+minusBtn.Position = UDim2.fromOffset(6, 4)
+minusBtn.Text = "-"
+minusBtn.Font = Enum.Font.GothamBold
+minusBtn.TextSize = 18
+minusBtn.BackgroundColor3 = GLASS_BG
+minusBtn.BackgroundTransparency = 0.1
+minusBtn.TextColor3 = TEXT
+minusBtn.AutoButtonColor = false
+round(minusBtn, 8)
+stroke(minusBtn, 1, RED, 0.25)
+
+local plusBtn = minusBtn:Clone()
+plusBtn.Text = "+"
+plusBtn.Parent = header
+plusBtn.Position = UDim2.new(1, -46, 0, 4)
+
+local distanceLabel = Instance.new("TextLabel", header)
+distanceLabel.Size = UDim2.new(1, -100, 1, 0)
+distanceLabel.Position = UDim2.fromOffset(50, 0)
+distanceLabel.Text = "Distance: " .. distance
+distanceLabel.TextColor3 = TEXT
+distanceLabel.Font = Enum.Font.GothamBold
+distanceLabel.TextSize = 14
+distanceLabel.BackgroundTransparency = 1
+
+-- ============================
+-- PLAYER LIST
+-- ============================
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Position = UDim2.fromOffset(0, 50)
+scroll.Size = UDim2.new(1, 0, 1, -50)
+scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+scroll.ScrollBarThickness = 4
+scroll.BackgroundTransparency = 1
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding = UDim.new(0, 6)
+
+-- ============================
+-- CORE LOGIC (UNCHANGED)
+-- ============================
+local function hideNonCharacterItems(char)
+	for _, item in ipairs(char:GetChildren()) do
+		if item:IsA("Tool") or item:IsA("Accessory") or item:IsA("Hat") or item:IsA("Model") then
+			item.Parent = nil
+		end
+	end
+end
+
+local function updateTeleportation()
+	local myChar = LocalPlayer.Character
+	local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+	if not myRoot then return end
+
+	for _, name in ipairs(bringTargets) do
+		local p = Players:FindFirstChild(name)
+		if p and p.Character then
+			local root = p.Character:FindFirstChild("HumanoidRootPart")
+			if root then
+				hideNonCharacterItems(p.Character)
+				local newPos = myRoot.Position + myRoot.CFrame.LookVector * distance
+				root.CFrame = CFrame.new(newPos, myRoot.Position) * CFrame.Angles(0, math.rad(180), 0)
+			end
+		end
+	end
+end
+
+local function loopBring(name)
+	if table.find(bringTargets, name) then return end
+	table.insert(bringTargets, name)
+
+	coroutine.wrap(function()
+		while table.find(bringTargets, name) do
+			updateTeleportation()
+			task.wait(0.05)
+		end
+	end)()
+end
+
+local function stopBring(name)
+	local i = table.find(bringTargets, name)
+	if i then table.remove(bringTargets, i) end
+end
+
+-- ============================
+-- LIST BUILDER
+-- ============================
+local function refreshList()
+	for _, c in ipairs(scroll:GetChildren()) do
+		if c:IsA("TextButton") then c:Destroy() end
+	end
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			local active = table.find(bringTargets, p.Name)
+
+			local btn = Instance.new("TextButton", scroll)
+			btn.Size = UDim2.new(1, -10, 0, 32)
+			btn.Text = p.Name
+			btn.Font = Enum.Font.Gotham
+			btn.TextSize = 14
+			btn.TextColor3 = TEXT
+			btn.BackgroundColor3 = active and ACTIVE_BG or GLASS_BG
+			btn.BackgroundTransparency = 0.12
+			btn.AutoButtonColor = false
+
+			round(btn, 10)
+			stroke(btn, 1, active and RED or MUTED, 0.3)
+
+			btn.MouseButton1Click:Connect(function()
+				if active then
+					stopBring(p.Name)
+				else
+					loopBring(p.Name)
+				end
+				refreshList()
+			end)
+		end
+	end
+
+	scroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 6)
+end
+
+Players.PlayerAdded:Connect(refreshList)
+Players.PlayerRemoving:Connect(function(p)
+	stopBring(p.Name)
+	refreshList()
+end)
+
+-- ============================
+-- TOUCH + MOUSE DRAGGING
+-- ============================
+local dragging = false
+local dragInput, dragStart, startPos
+
+local function beginDrag(input)
+	dragging = true
+	dragStart = input.Position
+	startPos = toggleBtn.Position
+
+	input.Changed:Connect(function()
+		if input.UserInputState == Enum.UserInputState.End then
+			dragging = false
+		end
+	end)
+end
+
+toggleBtn.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+	or input.UserInputType == Enum.UserInputType.Touch then
+		beginDrag(input)
+	end
+end)
+
+UIS.InputChanged:Connect(function(input)
+	if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+	or input.UserInputType == Enum.UserInputType.Touch) then
+		local delta = input.Position - dragStart
+
+		toggleBtn.Position = UDim2.new(
+			startPos.X.Scale, startPos.X.Offset + delta.X,
+			startPos.Y.Scale, startPos.Y.Offset + delta.Y
+		)
+
+		frame.Position = UDim2.fromOffset(
+			toggleBtn.AbsolutePosition.X - frame.AbsoluteSize.X - 10,
+			toggleBtn.AbsolutePosition.Y
+		)
+	end
+end)
+
+-- ============================
+-- UI HOOKS
+-- ============================
+toggleBtn.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
+
+plusBtn.MouseButton1Click:Connect(function()
+	distance += 1
+	distanceLabel.Text = "Distance: " .. distance
+end)
+
+minusBtn.MouseButton1Click:Connect(function()
+	distance = math.max(1, distance - 1)
+	distanceLabel.Text = "Distance: " .. distance
+end)
+
+-- Init
+refreshList()
