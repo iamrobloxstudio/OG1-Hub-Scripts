@@ -22,8 +22,8 @@ local function applyHitbox(player)
 	pcall(function()
 		hrp.Size = Vector3.new(_G.HitboxSize, _G.HitboxSize, _G.HitboxSize)
 		hrp.Transparency = 0.7
-		hrp.BrickColor = Color3.fromRGB(0,0,0)
-		hrp.Material = Enum.Material.SmoothPlastic
+		hrp.BrickColor = Color3.fromRGB(0,255,0)
+		hrp.Material = Enum.Material.ForceField
 		hrp.CanCollide = false
 		hrp.CanQuery = true
 		hrp.canTouch = true
