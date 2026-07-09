@@ -1,6 +1,6 @@
 -- TFL Loopkill
 -- Targeted aura system for killing selected players from anywhere
--- UI with player selection panel
+-- UI with player selection panel with mobile/PC scaling
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -50,6 +50,21 @@ local function cleanup()
 end
 
 _G.__TFLLoopkillCleanup = cleanup
+
+-- Mobile/PC scaling function
+local function updateScale()
+	if not workspace.CurrentCamera then return end
+	local viewport = workspace.CurrentCamera.ViewportSize
+	local minDim = math.min(viewport.X, viewport.Y)
+	
+	if game:GetService("UserInputService").TouchEnabled then
+		-- Mobile scaling - smaller UI for small screens
+		return math.clamp(minDim / 720, 0.7, 0.95)
+	else
+		-- PC scaling - standard size
+		return math.clamp(minDim / 1200, 0.9, 1.1)
+	end
+end
 
 -- Helper functions
 local function getHRP(char)
@@ -105,6 +120,17 @@ local function createUI()
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = CoreGui
 	
+	-- Add UI Scale for mobile/PC
+	local uiScale = Instance.new("UIScale", screenGui)
+	uiScale.Scale = updateScale()
+	
+	-- Update scale on resize
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			uiScale.Scale = updateScale()
+		end)
+	end
+	
 	-- Toggle button
 	local toggleBtn = Instance.new("TextButton")
 	toggleBtn.Name = "ToggleButton"
@@ -119,9 +145,7 @@ local function createUI()
 	toggleBtn.AutoButtonColor = false
 	toggleBtn.Parent = screenGui
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
-	local stroke = Instance.new("UIStroke", toggleBtn)
-	stroke.Color = THEME.Accent
-	stroke.Thickness = 1.4
+	Instance.new("UIStroke", toggleBtn).Color = THEME.Accent
 	
 	-- Player list panel
 	local playerFrame = Instance.new("Frame")
@@ -134,10 +158,7 @@ local function createUI()
 	playerFrame.BackgroundTransparency = 0.05
 	playerFrame.Parent = screenGui
 	Instance.new("UICorner", playerFrame).CornerRadius = UDim.new(0, 16)
-	local frameStroke = Instance.new("UIStroke", playerFrame)
-	frameStroke.Color = THEME.Accent
-	frameStroke.Thickness = 1.4
-	frameStroke.Transparency = 0.2
+	Instance.new("UIStroke", playerFrame).Color = THEME.Accent
 	
 	local layout = Instance.new("UIListLayout", playerFrame)
 	layout.Padding = UDim.new(0, 6)
