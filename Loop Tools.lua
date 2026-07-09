@@ -1,11 +1,10 @@
 -- TFL Loop Tools
 -- Bring tools to a single selected player for maximum hit registration
--- Black/Green hacker theme UI
+-- Black/Green hacker theme UI with mobile/PC scaling
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
@@ -27,7 +26,6 @@ local AvoidCollisionOffset = Vector3.new(0, 0, 0.5)
 -- State
 local TargetPlayerName = nil
 local ToolPartsCache = {}
-local PlayerCache = {}
 
 -- Cleanup
 if _G.__TFLLoopToolsCleanup then
@@ -48,11 +46,25 @@ local function cleanup()
 	end
 	table.clear(Connections)
 	table.clear(ToolPartsCache)
-	table.clear(PlayerCache)
 	TargetPlayerName = nil
 end
 
 _G.__TFLLoopToolsCleanup = cleanup
+
+-- Mobile/PC scaling function
+local function updateScale()
+	if not workspace.CurrentCamera then return end
+	local viewport = workspace.CurrentCamera.ViewportSize
+	local minDim = math.min(viewport.X, viewport.Y)
+	
+	if UserInputService.TouchEnabled then
+		-- Mobile scaling - smaller UI for small screens
+		return math.clamp(minDim / 720, 0.7, 0.95)
+	else
+		-- PC scaling - standard size
+		return math.clamp(minDim / 1200, 0.9, 1.1)
+	end
+end
 
 -- Get tool part
 local function getToolPart(tool)
@@ -95,6 +107,17 @@ local function createUI()
 	screenGui.Name = "TFLLoopTools"
 	screenGui.ResetOnSpawn = false
 	screenGui.Parent = CoreGui
+	
+	-- Add UI Scale for mobile/PC
+	local uiScale = Instance.new("UIScale", screenGui)
+	uiScale.Scale = updateScale()
+	
+	-- Update scale on resize
+	if workspace.CurrentCamera then
+		workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+			uiScale.Scale = updateScale()
+		end)
+	end
 	
 	-- Main panel
 	local panel = Instance.new("Frame")
@@ -175,8 +198,7 @@ end
 
 -- UI Events
 ToggleButton.MouseButton1Click:Connect(function()
-	-- Show player selection dropdown
-	-- For now, cycle through players
+	-- Cycle through players
 	if not TargetPlayerName then
 		for _, plr in ipairs(Players:GetPlayers()) do
 			if plr ~= LocalPlayer then
