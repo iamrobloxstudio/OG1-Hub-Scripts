@@ -763,9 +763,9 @@ welcomeText.Text = "Welcome to the TFL Hub. This hub is temporary and will be re
 welcomeText.Parent = pageWelcome
 
 local Welcome = {
-	{"Get Base", "https://raw.githubusercontent.com/SuperScripterFr/Scripting/refs/heads/main/Get%20Base"},
-	{"Respawn", "https://pastefy.app/J42OJop5/raw"},
-	{"Get Tools", "https://pastefy.app/1X7krse5/raw"},
+	{"Get Base", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Get%20Base.lua"},
+	{"Respawn", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Respawn.lua"},
+	{"Get Tools", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Tool%20Grabber.lua"},
 }
 
 for i, t in ipairs(Welcome) do
@@ -787,11 +787,11 @@ toolsHeader.Text = "Tool Scripts"
 toolsHeader.Parent = toolsPage
 
 local tools = {
-	{"No Cooldown", "https://pastefy.app/0IpBdxQH/raw"},
-	{"Insta-Kill", "https://pastefy.app/recssC6f/raw"},
-	{"Use Tools", "https://pastefy.app/6nNS42bO/raw"},
-	{"Hit Amplifier", "https://pastefy.app/2h3VCSCt/raw"},
-	{"Loop Tools", "https://pastefy.app/gsxJtENZ/raw"},
+	{"No Cooldown", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/No%20Cooldown.lua"},
+	{"Insta-Kill", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Insta-Kill.lua"},
+	{"Use Tools", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Use%20Tools.lua"},
+	{"Hit Amplifier", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Hit%20Amplifier.lua"},
+	{"Loop Tools", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Loop%20Tools.lua"},
 }
 
 for i, t in ipairs(tools) do
@@ -812,10 +812,10 @@ pHeader.Text = "Player Scripts"
 pHeader.Parent = playerPage
 
 local playerScripts = {
-	{"Hitbox", "https://pastefy.app/xPkHwKVq/raw"},
-	{"Loopbring", "https://pastefy.app/y8ZvQi8d/raw"},
-	{"Kill Aura", "https://pastefy.app/X9abK97Y/raw"},
-	{"Loopkill", "https://pastefy.app/yt5pcF8j/raw"},
+	{"Hitbox", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Damage.lua"},
+	{"Loopbring", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Loopbring.lua"},
+	{"Kill Aura", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Kill%20Aura.lua"},
+	{"Loopkill", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Loopkill.lua"},
 	{"Anti-Lag", "https://pastefy.app/vppgT4ae/raw"},
 }
 
@@ -838,7 +838,7 @@ oHeader.Parent = otherPage
 
 local otherScripts = {
 	{"Infinite Yield", "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"},
-	{"Float/Grip", "https://pastefy.app/kEDEb3QD/raw"},
+	{"Grip", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Grip.lua"},
 	{"Axe Smash Spam", "https://pastefy.app/CvywWIZ9/raw"},
 	{"Emote GUI", "https://pastefy.app/T4YoBRGj/raw"},
 }
