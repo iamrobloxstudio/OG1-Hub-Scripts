@@ -1,7 +1,3 @@
--- TFL Kill Aura
--- Proximity-based tool activation for maximum damage - always active in range
--- No UI, pure logic
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -10,7 +6,7 @@ local LocalPlayer = Players.LocalPlayer
 -- Configuration
 local AURA_RANGE = 30
 local TOUCH_BURST = 3
-local AURA_RATE = 1/60
+local AURA_RATE = 1/30
 
 -- Caches
 local ToolsCache = {}
@@ -33,17 +29,10 @@ local function refreshTools()
 			local touchPart = tool:FindFirstChildWhichIsA("TouchTransmitter", true)
 			local part = touchPart and touchPart.Parent
 			
-			-- Get fight event if available
-			local fightEvent = tool:FindFirstChild("FightEvent", true)
-			if fightEvent and not fightEvent:IsA("RemoteEvent") then
-				fightEvent = nil
-			end
-			
-			if part or fightEvent then
+			if part or then
 				table.insert(ToolsCache, {
 					Tool = tool,
 					TouchPart = part,
-					FightEvent = fightEvent
 				})
 			end
 		end
@@ -93,20 +82,8 @@ end
 local function attackTool(toolData, target)
 	local tool = toolData.Tool
 	local touch = toolData.TouchPart
-	local fight = toolData.FightEvent
 	
 	if not tool or not tool.Parent then return end
-	
-	-- FightEvent first (instant damage)
-	if fight then
-		pcall(function()
-			for _ = 1, TOUCH_BURST do
-				fight:FireServer()
-			end
-		end)
-	else
-		-- Fallback to Activate
-		pcall(tool.Activate, tool)
 	end
 	
 	-- Touch assist
