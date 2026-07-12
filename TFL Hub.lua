@@ -1228,7 +1228,7 @@ local function updateNoclip()
 	
 	-- Set all parts to noclip collision group (except HRP)
 	for _, part in ipairs(char:GetChildren()) do
-		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+		if part:IsA("BasePart")
 			pcall(function()
 				PhysicsService:SetPartCollisionGroup(part, noclipCollisionGroupId)
 			end)
