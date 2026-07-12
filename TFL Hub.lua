@@ -1204,70 +1204,146 @@ end
 -- ======= Finalize and initial print =======
 showPage("Welcome")
 
--- AUTO NOCLIP - Activates when hub loads
+-- ============================================================================
+-- 🔥 AUTO NOCLIP - Proper implementation
+-- Walks through walls, no collision with hitboxes, no getting pushed
+-- HumanoidRootPart retains CanCollide so you walk on the ground normally
+-- ============================================================================
 local noclipEnabled = true
-local noclipCollisionGroupId = 100
 
--- Create noclip collision group
-local function setupNoclipCollisionGroup()
-	local PhysicsService = game:GetService("PhysicsService")
-	-- Create collision group for noclip
-	pcall(function()
-		PhysicsService:CreateCollisionGroup(noclipCollisionGroupId)
-		PhysicsService:CollisionGroupSetCollidable(noclipCollisionGroupId, false)
-	end)
-end
+local originalCanCollide = {}
 
-setupNoclipCollisionGroup()
-
-local function updateNoclip()
-	local char = LocalPlayer.Character
+local function restoreOriginalCollision(char)
 	if not char then return end
-	
-	local PhysicsService = game:GetService("PhysicsService")
-	
-	-- Set all parts to noclip collision group (except HRP)
-	for _, part in ipairs(char:GetChildren()) do
-		if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-			pcall(function()
-				PhysicsService:SetPartCollisionGroup(part, noclipCollisionGroupId)
-			end)
+	for part, val in pairs(originalCanCollide) do
+		if part and part.Parent then
+			part.CanCollide = val
 		end
 	end
+	table.clear(originalCanCollide)
+end
+
+local function applyNoclip(char)
+	if not char then return end
 	
-	-- Also handle tools
-	for _, tool in ipairs(char:GetChildren()) do
-		if tool:IsA("Tool") then
-			for _, part in ipairs(tool:GetDescendants()) do
-				if part:IsA("BasePart") then
-					pcall(function()
-						PhysicsService:SetPartCollisionGroup(part, noclipCollisionGroupId)
-					end)
+	-- Wait for HRP to exist
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	
+	-- Process all parts in character: body parts, accessories, tools
+	local function processParts(container)
+		for _, child in ipairs(container:GetChildren()) do
+			if child:IsA("BasePart") then
+				if child ~= hrp then
+					-- Save original state if not already saved
+					if originalCanCollide[child] == nil then
+						originalCanCollide[child] = child.CanCollide
+					end
+					-- Disable collision - this allows walking through walls
+					-- and prevents hitboxes from pushing us around
+					child.CanCollide = false
+					
+					-- Massless prevents physics interference with character movement
+					if not child:GetAttribute("TFL_WasMassless") then
+						child:SetAttribute("TFL_WasMassless", child.Massless)
+					end
+					child.Massless = true
+				else
+					-- HRP keeps CanCollide = true to stand on ground
+					if originalCanCollide[child] == nil then
+						originalCanCollide[child] = child.CanCollide
+					end
+					child.CanCollide = true
+					child.Massless = false
 				end
+			elseif child:IsA("Tool") or child:IsA("Accessory") or child:IsA("Model") then
+				processParts(child)
 			end
 		end
 	end
+	
+	processParts(char)
 end
 
--- Character bind for noclip
+local function restoreOriginalMass(char)
+	if not char then return end
+	local function processParts(container)
+		for _, child in ipairs(container:GetChildren()) do
+			if child:IsA("BasePart") then
+				local wasMassless = child:GetAttribute("TFL_WasMassless")
+				if wasMassless ~= nil then
+					child.Massless = wasMassless
+				end
+			elseif child:IsA("Tool") or child:IsA("Accessory") or child:IsA("Model") then
+				processParts(child)
+			end
+		end
+	end
+	processParts(char)
+end
+
+local function setNoclipState(char, enabled)
+	if not char then return end
+	if enabled then
+		applyNoclip(char)
+	else
+		restoreOriginalCollision(char)
+		restoreOriginalMass(char)
+	end
+end
+
+-- Apply noclip on character spawn/change
 LocalPlayer.CharacterAdded:Connect(function(char)
 	char:WaitForChild("HumanoidRootPart", 5)
 	task.wait(0.1)
-	updateNoclip()
-end)
-
--- Noclip loop
-RunService.Heartbeat:Connect(function()
 	if noclipEnabled then
-		updateNoclip()
+		setNoclipState(char, true)
 	end
 end)
 
--- Noclip toggle key
+-- Noclip maintenance loop: keeps noclip applied as new parts are added
+RunService.Heartbeat:Connect(function()
+	if noclipEnabled then
+		local char = LocalPlayer.Character
+		if char then
+			local hrp = char:FindFirstChild("HumanoidRootPart")
+			if hrp then
+				-- Ensure HRP stays collidable for ground walking
+				hrp.CanCollide = true
+				hrp.Massless = false
+				
+				-- Re-apply noclip to all non-HRP parts
+				local function enforceNoclip(container)
+					for _, child in ipairs(container:GetChildren()) do
+						if child:IsA("BasePart") and child ~= hrp then
+							if child.CanCollide ~= false then
+								if originalCanCollide[child] == nil then
+									originalCanCollide[child] = child.CanCollide
+								end
+								child.CanCollide = false
+							end
+							if not child:GetAttribute("TFL_WasMassless") then
+								child:SetAttribute("TFL_WasMassless", child.Massless)
+							end
+							child.Massless = true
+						elseif child:IsA("Tool") or child:IsA("Accessory") or child:IsA("Model") then
+							enforceNoclip(child)
+						end
+					end
+				end
+				enforceNoclip(char)
+			end
+		end
+	end
+end)
+
+-- Noclip toggle key (N key)
 UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	if input.KeyCode == Enum.KeyCode.N then
 		noclipEnabled = not noclipEnabled
+		local char = LocalPlayer.Character
+		setNoclipState(char, noclipEnabled)
 	end
 end)
 
