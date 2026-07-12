@@ -253,6 +253,10 @@ end))
 
 if LocalPlayer.Character then
 	bindCharacter(LocalPlayer.Character)
+	-- Attach death listener to initial character
+	task.spawn(function()
+		listenForDeath(LocalPlayer.Character)
+	end)
 end
 
 -- Equip up to MAX_TOOLS from backpack
@@ -681,29 +685,91 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
 	end
 end))
 
--- Respawn handler - FIXED: Re-equip tools after respawn when active
-track(LocalPlayer.CharacterAdded:Connect(function()
-	if Active then
+-- ============================================================================
+-- GUIDE() - Call this function to run a re-equip loop
+-- Automatically equips tools from backpack, then stops once equipped
+-- Also acts as a backup on death via Humanoid.Died
+-- ============================================================================
+
+-- Death backup: listen to Humanoid.Died on current character
+local function listenForDeath(char)
+	if not char then return end
+	local hum = char:FindFirstChildWhichIsA("Humanoid")
+	if not hum then return end
+	
+	-- Track the death connection so we can disconnect on cleanup
+	if _G.__TFL_DeathConn and _G.__TFL_DeathConn.Connected then
+		_G.__TFL_DeathConn:Disconnect()
+	end
+	
+	_G.__TFL_DeathConn = hum.Died:Connect(function()
+		if not Active then return end
+		-- Run Guide() after death
 		task.spawn(function()
-			local char = LocalPlayer.Character
-			if not char then return end
-			
-			char:WaitForChild("HumanoidRootPart", 5)
-			char:WaitForChild("RightHand", 5)
-			char:WaitForChild("LeftHand", 5)
-			
-			bindCharacter(char)
-			equipAllTools()
-			cacheTools()
+			task.wait(0.5) -- Brief delay for respawn to begin
+			Guide()
+		end)
+	end)
+	
+	-- Also track in Connections for cleanup
+	table.insert(Connections, _G.__TFL_DeathConn)
+end
+
+-- Guide() - Re-equip loop: equips tools, runs until tools are cached, then stops
+local function Guide()
+	if not Active then return end
+	
+	local char = LocalPlayer.Character
+	if not char then
+		-- Wait for character if it doesn't exist yet
+		char = LocalPlayer.CharacterAdded:Wait()
+	end
+	
+	-- Wait for character parts
+	char:WaitForChild("HumanoidRootPart", 5)
+	char:WaitForChild("RightHand", 5)
+	char:WaitForChild("LeftHand", 5)
+	
+	bindCharacter(char)
+	
+	-- Re-equip loop: keeps trying until tools are equipped
+	local maxAttempts = 50
+	local attempt = 0
+	
+	while Active and attempt < maxAttempts do
+		attempt = attempt + 1
+		
+		-- Equip tools from backpack
+		equipAllTools()
+		cacheTools()
+		
+		if #ToolsCache > 0 then
+			-- Tools are equipped! Apply welds and burst activate, then stop
 			applyToolWelds()
 			
-			-- Burst activation after respawn
+			-- Burst activation
 			for _ = 1, 10 do
 				if #ToolsCache > 0 then
 					damagePulse()
 				end
 				RunService.Heartbeat:Wait()
 			end
+			
+			return -- Stop the loop, tools are equipped
+		end
+		
+		RunService.Heartbeat:Wait()
+	end
+end
+
+-- Respawn handler - uses Guide() for re-equip on character add
+track(LocalPlayer.CharacterAdded:Connect(function(char)
+	-- Re-attach death listener to new character
+	listenForDeath(char)
+	
+	if Active then
+		task.spawn(function()
+			Guide()
 		end)
 	end
 end))
@@ -770,3 +836,6 @@ updateUI()
 
 print("[TFL Use Tools] Loaded - Advanced tool activation system ready (APS: 10-1000, Tools: 1-10)")
 print("[TFL Use Tools] Mode: Normal=Activate, Event=FightEvent, Max=Both (fixed 10APS)")
+
+-- Expose Guide() globally so other scripts can call it
+_G.TFL_Guide = Guide
