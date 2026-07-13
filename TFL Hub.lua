@@ -759,7 +759,7 @@ welcomeText.TextXAlignment = Enum.TextXAlignment.Left
 welcomeText.Font = Enum.Font.Code
 welcomeText.TextSize = 18
 welcomeText.TextColor3 = DEFAULT_THEME.Text
-welcomeText.Text = "Welcome to the TFL Hub. This hub is temporary and will be rebuilt in the future. For now, you can use the buttons below to execute scripts. Please note that some scripts may not work as expected."
+welcomeText.Text = "Welcome to the TFL Hub. Made by TFL Fromer Leader, Dyllan. Note that this hub will no longer recieve updates with Me gone, and I will also not return. Enjoy the scripts. Hopefully it's 'Strong' enough for you all. Goodbye, and Good luck. - Dyllan"
 welcomeText.Parent = pageWelcome
 
 local Welcome = {
