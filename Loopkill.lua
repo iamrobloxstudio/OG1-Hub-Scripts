@@ -141,7 +141,7 @@ local function createUI()
 	toggleBtn.TextColor3 = THEME.Text
 	toggleBtn.Font = Enum.Font.GothamBold
 	toggleBtn.TextSize = 13
-	toggleBtn.Text = "TARGET AURA"
+	toggleBtn.Text = "LOOPKILL"
 	toggleBtn.AutoButtonColor = false
 	toggleBtn.Parent = screenGui
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
