@@ -8,11 +8,11 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Configuration
-local AURA_RANGE = 28
+local AURA_RANGE = 20
 local TOUCH_BURST = 2
-local FIGHT_BURST = 5
-local RESPAWN_BURST_TIME = 2.0
-local SPAWN_MULTI_BURST = 10
+local FIGHT_BURST = 2
+local RESPAWN_BURST_TIME = .5
+local SPAWN_MULTI_BURST = 1
 
 -- State
 local ToolsCache = {}
