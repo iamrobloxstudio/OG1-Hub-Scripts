@@ -1,3 +1,7 @@
+-- TFL Kill Aura
+-- Proximity damage system with optimized tool activation
+-- Black/Green hacker theme
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
@@ -12,14 +16,17 @@ local AURA_RATE = 1/30
 local ToolsCache = {}
 local LastAura = 0
 
+-- Pre-allocated buffers for performance
+local TargetPartsBuffer = {}
+
 -- Get HRP safely
 local function getHRP(char)
 	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
 end
 
--- Refresh tools cache
+-- Refresh tools cache - OPTIMIZED: single pass, pre-allocated buffer
 local function refreshTools()
-	ToolsCache = {}
+	table.clear(ToolsCache)
 	local char = LocalPlayer.Character
 	if not char then return end
 	
@@ -29,7 +36,7 @@ local function refreshTools()
 			local touchPart = tool:FindFirstChildWhichIsA("TouchTransmitter", true)
 			local part = touchPart and touchPart.Parent
 			
-			if part or then
+			if part then
 				table.insert(ToolsCache, {
 					Tool = tool,
 					TouchPart = part,
@@ -39,12 +46,12 @@ local function refreshTools()
 	end
 end
 
--- Get all targets in range
+-- Get all targets in range - OPTIMIZED: pre-allocated buffer
 local function getTargets()
-	local targets = {}
+	table.clear(TargetPartsBuffer)
 	local myChar = LocalPlayer.Character
 	local myRoot = myChar and getHRP(myChar)
-	if not myRoot then return targets end
+	if not myRoot then return TargetPartsBuffer end
 	
 	for _, plr in ipairs(Players:GetPlayers()) do
 		if plr ~= LocalPlayer then
@@ -64,7 +71,7 @@ local function getTargets()
 							end
 						end
 						if #parts > 0 then
-							table.insert(targets, {
+							table.insert(TargetPartsBuffer, {
 								Root = root,
 								Parts = parts
 							})
@@ -75,7 +82,7 @@ local function getTargets()
 		end
 	end
 	
-	return targets
+	return TargetPartsBuffer
 end
 
 -- Attack targets with tool
@@ -84,7 +91,6 @@ local function attackTool(toolData, target)
 	local touch = toolData.TouchPart
 	
 	if not tool or not tool.Parent then return end
-	end
 	
 	-- Touch assist
 	if touch then
@@ -98,14 +104,15 @@ local function attackTool(toolData, target)
 end
 
 -- Character bind
-LocalPlayer.CharacterAdded:Connect(function()
-	task.wait(0.1)
+local function onCharacterAdded()
+	-- Use Heartbeat for better responsiveness
+	RunService.Heartbeat:Wait()
 	refreshTools()
-end)
+end
 
-LocalPlayer.CharacterRemoving:Connect(function()
+local function onCharacterRemoving()
 	table.clear(ToolsCache)
-end)
+end
 
 -- Use shared target from Loopbring if available
 local function getCurrentTarget()
@@ -115,8 +122,8 @@ local function getCurrentTarget()
 	return nil
 end
 
--- Main loop
-RunService.Heartbeat:Connect(function()
+-- Main loop - OPTIMIZED: PreSimulation for better timing
+RunService.PreSimulation:Connect(function()
 	local now = os.clock()
 	if now - LastAura < AURA_RATE then return end
 	LastAura = now
@@ -137,4 +144,11 @@ RunService.Heartbeat:Connect(function()
 	end
 end)
 
-print("[TFL Kill Aura] Loaded - Proximity damage active")
+-- Character events
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+LocalPlayer.CharacterRemoving:Connect(onCharacterRemoving)
+
+-- Initial tool refresh
+refreshTools()
+
+print("[TFL Kill Aura] Loaded - Proximity damage active (optimized)")
