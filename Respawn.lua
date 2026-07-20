@@ -1,6 +1,6 @@
 --=====================================================
--- ⚡ ULTRA RESPAWN (STABLE BUILD)
--- No connection stacking • Clean lifecycle • Low overhead
+-- ⚡ ULTRA RESPAWN V2
+-- Instant respawn with Guide() integration • No multi-firing • Network efficient
 --=====================================================
 
 local Players = game:GetService("Players")
@@ -22,6 +22,8 @@ local deathConn = nil
 local charConn = nil
 
 local respawnDebounce = false
+local lastRespawnTime = 0
+local RESPAWN_COOLDOWN = 0.3  -- Prevent multi-firing
 
 -----------------------------------------------------
 -- CLEAN CONNECTIONS
@@ -35,15 +37,25 @@ local function clearConnections()
 end
 
 -----------------------------------------------------
--- RESPAWN CORE (SAFE + DEBOUNCED)
+-- RESPAWN CORE (SAFE + DEBOUNCED + GUIDE INTEGRATION)
 -----------------------------------------------------
 
 local function doRespawn()
+	-- Cooldown to prevent multi-firing
+	local now = os.clock()
+	if now - lastRespawnTime < RESPAWN_COOLDOWN then return end
 	if respawnDebounce then return end
+	
 	respawnDebounce = true
-
+	lastRespawnTime = now
+	
 	task.spawn(function()
-		if GuideEvent and GuideEvent:IsA("RemoteEvent") then
+		-- Try Guide() first if available (for Use Tools integration)
+		if _G.TFL_Guide then
+			pcall(function()
+				_G.TFL_Guide()
+			end)
+		elseif GuideEvent and GuideEvent:IsA("RemoteEvent") then
 			pcall(function()
 				GuideEvent:FireServer()
 			end)
@@ -52,7 +64,8 @@ local function doRespawn()
 				LocalPlayer:LoadCharacter()
 			end)
 		end
-
+		
+		-- Use Heartbeat wait for better ping handling
 		RunService.Heartbeat:Wait()
 		respawnDebounce = false
 	end)
@@ -64,12 +77,12 @@ end
 
 local function bindCharacter(char)
 	Character = char
-	Humanoid = char:WaitForChild("Humanoid")
-
+	Humanoid = char:WaitForChild("Humanoid", 5)
+	
 	clearConnections()
-
+	
 	if not Humanoid then return end
-
+	
 	deathConn = Humanoid.Died:Connect(function()
 		if Enabled then
 			doRespawn()
@@ -84,11 +97,11 @@ end
 local function enable()
 	if Enabled then return end
 	Enabled = true
-
+	
 	if LocalPlayer.Character then
 		bindCharacter(LocalPlayer.Character)
 	end
-
+	
 	charConn = LocalPlayer.CharacterAdded:Connect(function(char)
 		if Enabled then
 			bindCharacter(char)
@@ -99,9 +112,9 @@ end
 local function disable()
 	if not Enabled then return end
 	Enabled = false
-
+	
 	clearConnections()
-
+	
 	if charConn then
 		charConn:Disconnect()
 		charConn = nil
@@ -113,7 +126,7 @@ end
 -----------------------------------------------------
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "UltraRespawnV5"
+gui.Name = "UltraRespawnV2"
 gui.ResetOnSpawn = false
 gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -146,7 +159,7 @@ btn.Parent = panel
 
 local function refreshUI()
 	btn.Text = Enabled and "RESPAWN: ON" or "RESPAWN: OFF"
-
+	
 	TweenService:Create(
 		stroke,
 		TweenInfo.new(0.2),
@@ -175,7 +188,7 @@ end)
 
 game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
 	if gp then return end
-
+	
 	if input.KeyCode == Enum.KeyCode.R then
 		if Enabled then
 			disable()
@@ -202,4 +215,4 @@ end)
 
 refreshUI()
 
-print("⚡ Ultra Respawn V5 Loaded (Stable Build)")
+print("⚡ Ultra Respawn V2 Loaded - Instant respawn with Guide() integration")
