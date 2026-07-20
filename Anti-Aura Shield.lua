@@ -1,6 +1,7 @@
 -- TFL Anti-Aura Shield
 -- Reflects incoming hits and pushes attackers away - defensive system
 -- Toggle with 'J' key
+-- OPTIMIZED: Connection management, PreSimulation timing
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -15,11 +16,29 @@ local REFLECT_BURST = 2
 
 -- State
 local Active = false
+local Connections = {}
 
 -- Helper functions
 local function getHRP(char)
 	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
 end
+
+-- Cleanup
+if _G.__TFLAntiAuraCleanup then
+	pcall(_G.__TFLAntiAuraCleanup)
+end
+
+local function cleanup()
+	Active = false
+	for _, conn in ipairs(Connections) do
+		if conn and conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	table.clear(Connections)
+end
+
+_G.__TFLAntiAuraCleanup = cleanup
 
 -- Reflect hit back to attacker
 local function reflectHit(attackerPart, toolPart)
@@ -52,8 +71,8 @@ local function pushAttacker(attackerChar)
 	end)
 end
 
--- Core shield loop
-RunService.Heartbeat:Connect(function()
+-- Core shield loop - OPTIMIZED: PreSimulation for better timing
+table.insert(Connections, RunService.PreSimulation:Connect(function()
 	if not Active then return end
 	
 	local char = LocalPlayer.Character
@@ -107,14 +126,14 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end
-end)
+end))
 
 -- Toggle keybind
-UserInputService.InputBegan:Connect(function(input, gpe)
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 	if input.KeyCode == Enum.KeyCode.J then
 		Active = not Active
 	end
-end)
+end))
 
-print("[TFL Anti-Aura Shield] Loaded - Defensive system ready (OFF by default)")
+print("[TFL Anti-Aura Shield] Loaded - Defensive system ready (OFF by default, optimized)")
