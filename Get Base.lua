@@ -1,10 +1,16 @@
--- TFL Get Base
+-- TFL Get Base V2
 -- Auto-claim base script for Super Power Tycoon and Mega Power Tycoon
+-- OPTIMIZED: Reduced loop frequency, better connection management
 
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
-local Tycoons = workspace:WaitForChild("Tycoons")
+local Tycoons = workspace:WaitForChild("Tycoons", 10)
+
+if not Tycoons then
+	warn("[TFL Get Base] workspace.Tycoons was not found.")
+	return
+end
 
 -- Place IDs
 local SPT_PLACE_ID = 5142372758
@@ -31,6 +37,7 @@ if not BASE_ORDER then
 end
 
 local claimed = false
+local Connections = {}
 
 -- Utilities
 local function fireTouch(part, target)
@@ -85,16 +92,27 @@ local function tryClaimAll()
 end
 
 -- Resilience Logic
-LocalPlayer.CharacterAdded:Connect(function(char)
+local function onCharacterAdded()
     claimed = false
-    char:WaitForChild("HumanoidRootPart", 5)
-end)
+    if LocalPlayer.Character then
+        LocalPlayer.Character:WaitForChild("HumanoidRootPart", 5)
+    end
+end
 
--- Try every frame until claimed
-RunService.Heartbeat:Connect(function()
+Connections[#Connections + 1] = LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
+-- OPTIMIZED: Use PreSimulation with rate limiting instead of every frame
+local lastClaimAttempt = 0
+local CLAIM_INTERVAL = 0.5
+
+RunService.PreSimulation:Connect(function()
     if not claimed and getRoot() then
-        tryClaimAll()
+        local now = os.clock()
+        if now - lastClaimAttempt >= CLAIM_INTERVAL then
+            lastClaimAttempt = now
+            tryClaimAll()
+        end
     end
 end)
 
-print("TFL Get Base Loaded")
+print("TFL Get Base V2 Loaded (optimized)")
