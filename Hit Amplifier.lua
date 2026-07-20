@@ -1,6 +1,6 @@
--- TFL Hit Amplifier
+-- TFL Hit Amplifier V2
 -- Enhanced hit detection with overlap scanning - always active
--- No UI, pure logic
+-- OPTIMIZED: Better performance, reduced allocations, PreSimulation timing
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -46,9 +46,9 @@ local function getHRP(char)
 	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
 end
 
--- Refresh tools
+-- Refresh tools - OPTIMIZED: Single pass
 local function refreshTools()
-	CachedTools = {}
+	table.clear(CachedTools)
 	local char = LocalPlayer.Character
 	if not char then return end
 	
@@ -56,12 +56,12 @@ local function refreshTools()
 		if t:IsA("Tool") then
 			local fight = t:FindFirstChild("FightEvent", true)
 			if fight and fight:IsA("RemoteEvent") then
-				table.insert(CachedTools, {Tool = t, FightEvent = fight})
+				CachedTools[#CachedTools + 1] = {Tool = t, FightEvent = fight}
 			else
 				-- Has touch capability
 				local touch = t:FindFirstChildWhichIsA("TouchTransmitter", true)
 				if touch then
-					table.insert(CachedTools, {Tool = t})
+					CachedTools[#CachedTools + 1] = {Tool = t}
 				end
 			end
 		end
@@ -97,9 +97,9 @@ OverlapParams.FilterType = Enum.RaycastFilterType.Blacklist
 track(LocalPlayer.CharacterAdded:Connect(refreshTools))
 refreshTools()
 
--- Main loop
-track(RunService.Heartbeat:Connect(function(dt)
-	Accumulator += dt
+-- Main loop - OPTIMIZED: PreSimulation for better timing
+track(RunService.PreSimulation:Connect(function(dt)
+	Accumulator = Accumulator + dt
 	if Accumulator < SCAN_RATE then return end
 	Accumulator = 0
 	
@@ -157,4 +157,4 @@ track(RunService.Heartbeat:Connect(function(dt)
 	end
 end))
 
-print("[TFL Hit Amplifier] Loaded - Enhanced hit detection active")
+print("[TFL Hit Amplifier] V2 Loaded - Enhanced hit detection active (optimized)")
