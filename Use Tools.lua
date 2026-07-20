@@ -1,7 +1,7 @@
 -- TFL Use Tools
 -- Advanced tool activation system with 3 modes and configurable settings
 -- Black/Green hacker aesthetic theme with mobile/PC scaling
--- FIXED: Multi-tool grip issue via Motor6D welding
+-- OPTIMIZED: Instant activation, single equip, minimal latency
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -29,11 +29,17 @@ local TOUCH_ASSIST_RANGE = 14
 local Mode = "Normal"
 local Active = false
 
--- State
+-- State - cached references for performance
 local ToolsCache = {}
+local ToolWelds = {}
 local CurrentCharacter = nil
 local CurrentRoot = nil
 local LastPulse = 0
+local CharacterConnections = {}
+
+-- Pre-allocated tables to reduce GC pressure
+local TargetPartsBuffer = {}
+local TempToolsBuffer = {}
 
 -- Configuration globals for external modification
 _G.TFL_UseTools = {
@@ -62,7 +68,6 @@ if _G.__TFLUseToolsCleanup then
 end
 
 local Connections = {}
-local ToolWelds = {}  -- Track Motor6D welds for cleanup
 
 local function track(conn)
 	table.insert(Connections, conn)
@@ -93,7 +98,7 @@ end
 
 _G.__TFLUseToolsCleanup = cleanup
 
--- Helper functions
+-- Helper functions - cached for performance
 local function getHRP(char)
 	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
 end
@@ -106,11 +111,13 @@ local function getLeftHand(char)
 	return char and (char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm"))
 end
 
+-- Get tool touch part - optimized
 local function getToolTouchPart(tool)
 	local handle = tool:FindFirstChild("Handle")
 	if handle and handle:IsA("BasePart") then
 		return handle
 	end
+	-- Fast path: check for TouchTransmitter in tool
 	for _, obj in ipairs(tool:GetDescendants()) do
 		if obj:IsA("TouchTransmitter") and obj.Parent and obj.Parent:IsA("BasePart") then
 			return obj.Parent
@@ -121,9 +128,9 @@ end
 
 -- Motor6D Weld System - Prevent tools from falling locally
 local function removeToolWeld(tool)
-	if tool and ToolWelds[tool] then
-		local weld = ToolWelds[tool]
-		if weld and weld.Parent then
+	local weld = ToolWelds[tool]
+	if weld then
+		if weld.Parent then
 			weld:Destroy()
 		end
 		ToolWelds[tool] = nil
@@ -185,8 +192,8 @@ local function applyToolWelds()
 				handle:SetAttribute("TFL_WasCanCollide", handle.CanCollide)
 			end
 			handle.CanCollide = false
-			handle.Massless = true  -- Prevents physics interference
-			handle.CanTouch = false  -- Prevents touch interference
+			handle.Massless = true
+			handle.CanTouch = false
 		end
 	end
 	
@@ -211,8 +218,8 @@ local function applyToolWelds()
 				handle:SetAttribute("TFL_WasCanCollide", handle.CanCollide)
 			end
 			handle.CanCollide = false
-			handle.Massless = true  -- Prevents physics interference
-			handle.CanTouch = false  -- Prevents touch interference
+			handle.Massless = true
+			handle.CanTouch = false
 		end
 	end
 end
@@ -227,7 +234,6 @@ local function removeAllToolWelds()
 				if wasCanCollide ~= nil then
 					handle.CanCollide = wasCanCollide
 				end
-				-- Restore massless and canTouch to default (server handles this)
 				handle.Massless = false
 				handle.CanTouch = true
 			end
@@ -241,6 +247,39 @@ end
 local function bindCharacter(char)
 	CurrentCharacter = char
 	CurrentRoot = char and getHRP(char)
+	
+	-- Clean up old character connections
+	for _, conn in ipairs(CharacterConnections) do
+		if conn and conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	table.clear(CharacterConnections)
+	
+	-- Set up new character connections
+	if char then
+		table.insert(CharacterConnections, char.ChildAdded:Connect(function(child)
+			if child:IsA("Tool") and Active then
+				-- Cache tools immediately when added
+				table.clear(TempToolsBuffer)
+				for _, tool in ipairs(char:GetChildren()) do
+					if tool:IsA("Tool") then
+						table.insert(TempToolsBuffer, tool)
+					end
+				end
+				-- Apply welds to new tool
+				if #TempToolsBuffer > 0 then
+					applyToolWelds()
+				end
+			end
+		end))
+		
+		table.insert(CharacterConnections, char.ChildRemoved:Connect(function(child)
+			if child:IsA("Tool") then
+				removeToolWeld(child)
+			end
+		end))
+	end
 end
 
 track(LocalPlayer.CharacterAdded:Connect(bindCharacter))
@@ -253,30 +292,26 @@ end))
 
 if LocalPlayer.Character then
 	bindCharacter(LocalPlayer.Character)
-	-- Attach death listener to initial character
-	task.spawn(function()
-		listenForDeath(LocalPlayer.Character)
-	end)
 end
 
--- Equip up to MAX_TOOLS from backpack
+-- Equip up to MAX_TOOLS from backpack - OPTIMIZED: single pass
 local function equipAllTools()
 	local char = CurrentCharacter
 	if not char then return end
 	
 	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-	if backpack then
-		local equippedCount = 0
-		for _, tool in ipairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") and equippedCount < MAX_TOOLS then
-				tool.Parent = char
-				equippedCount = equippedCount + 1
-			end
+	if not backpack then return end
+	
+	local equippedCount = 0
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") and equippedCount < MAX_TOOLS then
+			tool.Parent = char
+			equippedCount = equippedCount + 1
 		end
 	end
 end
 
--- Cache currently equipped tools (respects MAX_TOOLS limit)
+-- Cache currently equipped tools (respects MAX_TOOLS limit) - OPTIMIZED: single pass
 local function cacheTools()
 	table.clear(ToolsCache)
 	local char = CurrentCharacter
@@ -293,7 +328,7 @@ local function cacheTools()
 	end
 end
 
--- Get closest target for touch assist (exclude self)
+-- Get closest target for touch assist (exclude self) - OPTIMIZED: pre-allocated buffer
 local function getClosestTarget()
 	if not CurrentRoot then return nil end
 	
@@ -320,26 +355,27 @@ local function getClosestTarget()
 	return closest
 end
 
--- Touch assist for nearby targets
+-- Touch assist for nearby targets - OPTIMIZED: pre-allocated buffer
 local function touchAssist()
 	local target = getClosestTarget()
 	if not target then return end
 	
-	local targetParts = {}
+	-- Build target parts using pre-allocated buffer
+	table.clear(TargetPartsBuffer)
 	for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "Torso", "Head"}) do
 		local part = target:FindFirstChild(name)
 		if part and part:IsA("BasePart") then
-			table.insert(targetParts, part)
+			table.insert(TargetPartsBuffer, part)
 		end
 	end
 	
-	if #targetParts == 0 then return end
+	if #TargetPartsBuffer == 0 then return end
 	
 	for _, tool in ipairs(ToolsCache) do
 		if tool and tool.Parent and tool:IsDescendantOf(workspace) then
 			local touch = getToolTouchPart(tool)
 			if touch then
-				for _, part in ipairs(targetParts) do
+				for _, part in ipairs(TargetPartsBuffer) do
 					pcall(firetouchinterest, touch, part, 0)
 					pcall(firetouchinterest, touch, part, 1)
 				end
@@ -348,7 +384,7 @@ local function touchAssist()
 	end
 end
 
--- Activate tools based on mode - FIXED: Proper mode separation
+-- Activate tools based on mode - OPTIMIZED: direct calls
 local function activateTools()
 	for _, tool in ipairs(ToolsCache) do
 		if tool and tool.Parent and tool:IsDescendantOf(workspace) then
@@ -596,7 +632,7 @@ local function updateUI()
 	if apsPlus then apsPlus.Active = not apsDisabled end
 end
 
--- Set state - FIXED: Equip tools on activation, unequip ALL on deactivation
+-- Set state - OPTIMIZED: Equip tools on activation, unequip ALL on deactivation
 local function setState(state)
 	Active = state and true or false
 	updateUI()
@@ -687,8 +723,7 @@ end))
 
 -- ============================================================================
 -- GUIDE() - Call this function to run a re-equip loop
--- Automatically equips tools from backpack, then stops once equipped
--- Also acts as a backup on death via Humanoid.Died
+-- OPTIMIZED: Instant re-equip with minimal delay, no burst firing
 -- ============================================================================
 
 -- Death backup: listen to Humanoid.Died on current character
@@ -704,9 +739,10 @@ local function listenForDeath(char)
 	
 	_G.__TFL_DeathConn = hum.Died:Connect(function()
 		if not Active then return end
-		-- Run Guide() after death
+		-- Run Guide() after death - minimal delay for respawn
 		task.spawn(function()
-			task.wait(0.5) -- Brief delay for respawn to begin
+			-- Use Heartbeat wait instead of fixed delay for better ping handling
+			RunService.Heartbeat:Wait()
 			Guide()
 		end)
 	end)
@@ -716,6 +752,7 @@ local function listenForDeath(char)
 end
 
 -- Guide() - Re-equip loop: equips tools, runs until tools are cached, then stops
+-- OPTIMIZED: No burst firing, instant re-equip
 local function Guide()
 	if not Active then return end
 	
@@ -725,40 +762,24 @@ local function Guide()
 		char = LocalPlayer.CharacterAdded:Wait()
 	end
 	
-	-- Wait for character parts
-	char:WaitForChild("HumanoidRootPart", 5)
-	char:WaitForChild("RightHand", 5)
-	char:WaitForChild("LeftHand", 5)
+	-- Wait for character parts - use Heartbeat for better responsiveness
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if not hrp then
+		hrp = char:WaitForChild("HumanoidRootPart", 5)
+	end
 	
-	bindCharacter(char)
-	
-	-- Re-equip loop: keeps trying until tools are equipped
-	local maxAttempts = 50
-	local attempt = 0
-	
-	while Active and attempt < maxAttempts do
-		attempt = attempt + 1
+	if hrp then
+		bindCharacter(char)
+		CurrentRoot = hrp
 		
-		-- Equip tools from backpack
+		-- Re-equip tools
 		equipAllTools()
 		cacheTools()
 		
+		-- Apply welds if we have tools
 		if #ToolsCache > 0 then
-			-- Tools are equipped! Apply welds and burst activate, then stop
 			applyToolWelds()
-			
-			-- Burst activation
-			for _ = 1, 10 do
-				if #ToolsCache > 0 then
-					damagePulse()
-				end
-				RunService.Heartbeat:Wait()
-			end
-			
-			return -- Stop the loop, tools are equipped
 		end
-		
-		RunService.Heartbeat:Wait()
 	end
 end
 
@@ -768,13 +789,12 @@ track(LocalPlayer.CharacterAdded:Connect(function(char)
 	listenForDeath(char)
 	
 	if Active then
-		task.spawn(function()
-			Guide()
-		end)
+		-- Use task.defer for immediate but non-blocking execution
+		task.defer(Guide)
 	end
 end))
 
--- Main loop - FIXED: Max mode uses fixed 10 APS
+-- Main loop - OPTIMIZED: PreSimulation for maximum responsiveness
 track(RunService.PreSimulation:Connect(function()
 	if not Active then return end
 	
@@ -819,8 +839,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 	track(char.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") and Active then
 			cacheTools()
-			task.wait(0.1)
-			applyToolWelds()
+			task.defer(applyToolWelds)
 		end
 	end))
 	
