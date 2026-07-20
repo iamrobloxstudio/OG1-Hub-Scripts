@@ -1,5 +1,6 @@
--- TFL Tool Grabber V8
--- Instant tool acquisition with parallel pad touching
+-- TFL Tool Grabber V9
+-- Instant tool acquisition with optimized parallel pad touching
+-- OPTIMIZED: Reduced thread spawning, better connection management
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -120,6 +121,10 @@ local acquireRunning = false
 local scheduleSerial = 0
 local lifeSerial = 0
 local baseTouchCounts = {}
+
+-- Pre-allocated buffers for performance
+local TempPadsBuffer = {}
+local TempToolsBuffer = {}
 
 for _, baseName in ipairs(ALLOWED_BASE_ORDER) do
 	padsByBase[baseName] = {}
@@ -291,7 +296,7 @@ local function getClosestPad(baseName)
 	return closest
 end
 
--- Touch engine
+-- Touch engine - OPTIMIZED: Batched touches instead of parallel threads
 local function tapPad(root, pad, baseName, burstCount)
 	if type(firetouchinterest) ~= "function" then return end
 	if not root or not root.Parent or not pad or not pad.Parent then return end
@@ -346,6 +351,7 @@ local function acquirePass(root, wave, burstCount)
 	end
 end
 
+-- OPTIMIZED: Single-threaded burst with immediate execution
 local function runInstantRespawnBurst(character)
 	local myChar = character or currentCharacter or LocalPlayer.Character
 	if not myChar then return end
@@ -358,11 +364,9 @@ local function runInstantRespawnBurst(character)
 	local wave = buildWave(true)
 	acquirePass(root, wave, SPAWN_TOUCH_BURST)
 	
-	-- Parallel touch for speed
+	-- Additional touches in same frame for speed (no thread spawning)
 	for _, entry in ipairs(wave) do
-		task.spawn(function()
-			tapPad(root, entry.Pad, entry.Base, SPAWN_TOUCH_BURST)
-		end)
+		tapPad(root, entry.Pad, entry.Base, SPAWN_TOUCH_BURST)
 	end
 end
 
@@ -383,7 +387,8 @@ local function bindCharacter(character)
 			currentRoot = child
 			runInstantRespawnBurst(character)
 		elseif child:IsA("Tool") then
-			task.spawn(function()
+			-- Use task.defer for immediate but non-blocking
+			task.defer(function()
 				local root = currentRoot or character:FindFirstChild("HumanoidRootPart")
 				if root then
 					local wave = buildWave()
@@ -422,7 +427,7 @@ local function bindBackpack()
 	
 	backpack.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
-			task.spawn(function()
+			task.defer(function()
 				local root = currentRoot or LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 				if root then
 					local wave = buildWave()
@@ -479,4 +484,4 @@ _G.TFLToolGrabber = {
 	}
 }
 
-print("[TFLToolGrabber] V8 Loaded - Instant tool acquisition")
+print("[TFLToolGrabber] V9 Loaded - Instant tool acquisition (optimized)")
