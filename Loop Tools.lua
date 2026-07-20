@@ -1,6 +1,7 @@
 -- TFL Loop Tools
 -- Bring tools to a single selected player for maximum hit registration
 -- Black/Green hacker theme UI with mobile/PC scaling
+-- OPTIMIZED: Removed delays, improved responsiveness
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -82,7 +83,7 @@ local function getToolPart(tool)
 	return nil
 end
 
--- Update tool cache
+-- Update tool cache - OPTIMIZED: No delays, immediate update
 local function updateToolCache()
 	table.clear(ToolPartsCache)
 	if not LocalPlayer.Character then return end
@@ -224,9 +225,8 @@ ToggleButton.MouseButton1Click:Connect(function()
 	end
 end)
 
--- Character bind
+-- Character bind - OPTIMIZED: No delays
 track(LocalPlayer.CharacterAdded:Connect(function()
-	task.wait(0.1)
 	updateToolCache()
 end))
 
@@ -234,25 +234,23 @@ track(LocalPlayer.CharacterRemoving:Connect(function()
 	table.clear(ToolPartsCache)
 end))
 
--- Character tools bind
+-- Character tools bind - OPTIMIZED: Use task.defer instead of task.wait
 LocalPlayer.CharacterAdded:Connect(function(char)
 	if not char then return end
 	track(char.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
-			task.wait(0.05)
-			updateToolCache()
+			task.defer(updateToolCache)
 		end
 	end))
 	track(char.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") then
-			task.wait(0.05)
-			updateToolCache()
+			task.defer(updateToolCache)
 		end
 	end))
 end)
 
--- Main loop
-track(RunService.Heartbeat:Connect(function()
+-- Main loop - OPTIMIZED: PreSimulation for better timing
+track(RunService.PreSimulation:Connect(function()
 	if TargetPlayerName then
 		moveTools()
 	end
@@ -261,4 +259,4 @@ end))
 -- Initial cache
 updateToolCache()
 
-print("[TFL Loop Tools] Loaded - Tool bringer system ready")
+print("[TFL Loop Tools] Loaded - Tool bringer system ready (optimized)")
