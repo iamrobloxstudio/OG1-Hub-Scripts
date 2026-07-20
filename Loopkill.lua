@@ -1,6 +1,7 @@
 -- TFL Loopkill
 -- Targeted aura system for killing selected players from anywhere
 -- UI with player selection panel with mobile/PC scaling
+-- OPTIMIZED: PreSimulation timing, connection management
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -141,7 +142,7 @@ local function createUI()
 	toggleBtn.TextColor3 = THEME.Text
 	toggleBtn.Font = Enum.Font.GothamBold
 	toggleBtn.TextSize = 13
-	toggleBtn.Text = "LOOPKILL"
+	toggleBtn.Text = "TARGET AURA"
 	toggleBtn.AutoButtonColor = false
 	toggleBtn.Parent = screenGui
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
@@ -262,10 +263,10 @@ if ToggleButton then
 	end)
 end
 
--- Main loop
+-- Main loop - OPTIMIZED: PreSimulation for better timing
 local LastFire = 0
 
-track(RunService.Heartbeat:Connect(function()
+track(RunService.PreSimulation:Connect(function()
 	if not Active then return end
 	if #TargetOrder == 0 then return end
 	
@@ -289,4 +290,4 @@ track(RunService.Heartbeat:Connect(function()
 	end
 end))
 
-print("[TFL Loopkill] Loaded - Target aura system ready")
+print("[TFL Loopkill] Loaded - Target aura system ready (optimized)")
