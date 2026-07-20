@@ -1,6 +1,7 @@
 -- TFL Damage Amplifier Field
 -- Offensive field that boosts damage while disrupting enemies
 -- Toggle with 'K' key
+-- OPTIMIZED: PreSimulation timing, connection management
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -14,14 +15,32 @@ local PUSH_FORCE = 60
 
 -- State
 local Active = false
+local Connections = {}
 
 -- Helper functions
 local function getHRP(char)
 	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
 end
 
--- Main field loop
-RunService.Heartbeat:Connect(function()
+-- Cleanup
+if _G.__TFLDamageAmplifierCleanup then
+	pcall(_G.__TFLDamageAmplifierCleanup)
+end
+
+local function cleanup()
+	Active = false
+	for _, conn in ipairs(Connections) do
+		if conn and conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	table.clear(Connections)
+end
+
+_G.__TFLDamageAmplifierCleanup = cleanup
+
+-- Main field loop - OPTIMIZED: PreSimulation for better timing
+table.insert(Connections, RunService.PreSimulation:Connect(function()
 	if not Active then return end
 	
 	local char = LocalPlayer.Character
@@ -72,14 +91,14 @@ RunService.Heartbeat:Connect(function()
 			end
 		end
 	end
-end)
+end))
 
 -- Toggle keybind
-UserInputService.InputBegan:Connect(function(input, gpe)
+table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 	if input.KeyCode == Enum.KeyCode.K then
 		Active = not Active
 	end
-end)
+end))
 
-print("[TFL Damage Amplifier Field] Loaded - Offensive field ready (OFF by default)")
+print("[TFL Damage Amplifier Field] Loaded - Offensive field ready (OFF by default, optimized)")
