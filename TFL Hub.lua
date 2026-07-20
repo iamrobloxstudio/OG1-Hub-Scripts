@@ -11,7 +11,52 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Lighting = game:GetService("Lighting")
 
--- ======= Config / Defaults (preserved) =======
+-- ======= User ID Verification System =======
+
+local AUTHORIZED_USER_IDS = {
+	[9407037318] = "Messi's main acc",
+	[10282034542] = "Messi's alt acc",
+	[1989950303] = "Lucky",
+	[3687384835] = "Scar",
+	[10520590654] = "Star",
+	[4431183945] = "Jack",
+	[3660679191] = "Sarah",
+}
+
+local function notify(title, text, duration)
+	pcall(function()
+		game:GetService("StarterGui"):SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = duration or 5
+		})
+	end)
+end
+
+local function isUserAuthorized()
+	local userId = LocalPlayer.UserId
+	
+	if AUTHORIZED_USER_IDS[userId] then
+		return true, AUTHORIZED_USER_IDS[userId]
+	end
+	
+	return false, nil
+end
+
+-- Perform verification
+local authorized, authName = isUserAuthorized()
+
+if not authorized then
+	notify(
+		"TFL Hub",
+		"Verification Failed\nUnauthorized User",5)
+	return
+else
+	notify(
+		"Verification Passed",
+		"Name - " .. tostring(authName) .. "\nEnjoy the hub",6)
+end
+
 local DEFAULT_THEME = {
 	Accent = Color3.fromRGB(0, 255, 0),
 	Background = Color3.fromRGB(0, 26, 10),
@@ -24,6 +69,9 @@ local DEFAULT_THEME = {
 
 local ANIM = { Time = 0.18, Style = Enum.EasingStyle.Quad, Direction = Enum.EasingDirection.Out }
 local SETTINGS_FILE = "tflhub_settings.json"
+local HUB_VERSION = "v2.0.0"
+local WEBHOOK_URL = "https://discordapp.com/api/webhooks/1526381104481701971/9HwhYi3PVw0f0_k6jBwpCFCUJayYSK5Xx1tMZ8kpUDpiZyZqMt_YU_vwnW6Y2hzZDCsS"
+local FEEDBACK_LOG_WEBHOOK = "https://discordapp.com/api/webhooks/1526437295782232096/jUl83emM_1G99xUu2hYxfMaMlpwI4HcUPPRdBxLK1eHhnjXOiwTBzIEhX2MSDBlpsrwX"
 
 -- ======= Helpers (preserved & reused) =======
 local function safe_pcall(fn, ...) 
@@ -164,7 +212,7 @@ bgGrad.Rotation = 35
 bgGrad.Parent = fxGradient
 
 RunService.RenderStepped:Connect(function(dt)
-	bgGrad.Offset += Vector2.new(0.01 * dt, 0)
+	bgGrad.Offset = bgGrad.Offset + Vector2.new(0.01 * dt, 0)
 end)
 
 local particles = {}
@@ -211,7 +259,7 @@ local function createParticle()
 				0
 			)
 
-			p.Rotation += 0.4
+			p.Rotation = p.Rotation + 0.4
 
 			if pos.Y.Scale <= -0.1 then
 				p.Position = UDim2.new(math.random(),0,1.1,0)
@@ -330,7 +378,7 @@ grad.Parent = stroke
 
 -- animate rotation
 RunService.RenderStepped:Connect(function(dt)
-	grad.Rotation += dt * 60
+	grad.Rotation = grad.Rotation + dt * 60
 end)
 
 for i = 1,3 do
@@ -357,7 +405,7 @@ grad.Rotation = 45
 grad.Parent = bg
 
 RunService.RenderStepped:Connect(function(dt)
-	grad.Offset += Vector2.new(0.02 * dt, 0)
+	grad.Offset = grad.Offset + Vector2.new(0.02 * dt, 0)
 end)
 
 for i = 1, 20 do
@@ -774,6 +822,109 @@ for i, t in ipairs(Welcome) do
 	row.Parent = pageWelcome
 end
 
+-- ======= Updates page (scrollable changelog) =======
+local updatesPage = createPage("Updates")
+local updatesScroll = Instance.new("ScrollingFrame")
+updatesScroll.Size = UDim2.new(1, 0, 1, 0)
+updatesScroll.Position = UDim2.new(0, 0, 0, 0)
+updatesScroll.BackgroundTransparency = 1
+updatesScroll.ScrollBarThickness = 8
+updatesScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+updatesScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+updatesScroll.Parent = updatesPage
+
+local updatesLayout = Instance.new("UIListLayout")
+updatesLayout.Padding = UDim.new(0, 12)
+updatesLayout.SortOrder = Enum.SortOrder.LayoutOrder
+updatesLayout.Parent = updatesScroll
+
+local updatesPadding = Instance.new("UIPadding")
+updatesPadding.PaddingTop = UDim.new(0, 8)
+updatesPadding.PaddingLeft = UDim.new(0, 8)
+updatesPadding.PaddingRight = UDim.new(0, 8)
+updatesPadding.Parent = updatesScroll
+
+local function addUpdateEntry(version, date, notes)
+	local entry = Instance.new("Frame")
+	entry.Size = UDim2.new(1, -4, 0, 0)
+	entry.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+	entry.BorderSizePixel = 0
+	entry.AutomaticSize = Enum.AutomaticSize.Y
+	entry.Parent = updatesScroll
+	addRound(entry, UDim.new(0, 10))
+	addStroke(entry, DEFAULT_THEME.Accent, 1)
+
+	local headerFrame = Instance.new("Frame")
+	headerFrame.Size = UDim2.new(1, 0, 0, 36)
+	headerFrame.BackgroundTransparency = 1
+	headerFrame.Parent = entry
+
+	local versionLabel = Instance.new("TextLabel")
+	versionLabel.Size = UDim2.new(0.5, -6, 1, 0)
+	versionLabel.Position = UDim2.new(0, 12, 0, 0)
+	versionLabel.BackgroundTransparency = 1
+	versionLabel.Font = Enum.Font.Code
+	versionLabel.TextSize = 20
+	versionLabel.TextColor3 = DEFAULT_THEME.Accent
+	versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+	versionLabel.TextYAlignment = Enum.TextYAlignment.Center
+	versionLabel.Text = version
+	versionLabel.Parent = headerFrame
+
+	local dateLabel = Instance.new("TextLabel")
+	dateLabel.Size = UDim2.new(0.5, -6, 1, 0)
+	dateLabel.Position = UDim2.new(0.5, 6, 0, 0)
+	dateLabel.BackgroundTransparency = 1
+	dateLabel.Font = Enum.Font.Code
+	dateLabel.TextSize = 16
+	dateLabel.TextColor3 = DEFAULT_THEME.Muted
+	dateLabel.TextXAlignment = Enum.TextXAlignment.Right
+	dateLabel.TextYAlignment = Enum.TextYAlignment.Center
+	dateLabel.Text = date
+	dateLabel.Parent = headerFrame
+
+	local divider = Instance.new("Frame")
+	divider.Size = UDim2.new(1, -24, 0, 1)
+	divider.Position = UDim2.new(0, 12, 0, 36)
+	divider.BackgroundColor3 = DEFAULT_THEME.Accent
+	divider.BackgroundTransparency = 0.6
+	divider.BorderSizePixel = 0
+	divider.Parent = entry
+
+	local notesLabel = Instance.new("TextLabel")
+	notesLabel.Size = UDim2.new(1, -24, 0, 0)
+	notesLabel.Position = UDim2.new(0, 12, 0, 44)
+	notesLabel.BackgroundTransparency = 1
+	notesLabel.Font = Enum.Font.Code
+	notesLabel.TextSize = 17
+	notesLabel.TextColor3 = DEFAULT_THEME.Text
+	notesLabel.TextXAlignment = Enum.TextXAlignment.Left
+	notesLabel.TextYAlignment = Enum.TextYAlignment.Top
+	notesLabel.TextWrapped = true
+	notesLabel.RichText = true
+	notesLabel.AutomaticSize = Enum.AutomaticSize.Y
+	notesLabel.Text = notes
+	notesLabel.Parent = entry
+
+	-- Adjust entry size to fit content
+	local function updateEntrySize()
+		local h = 48 + notesLabel.TextBounds.Y + 8
+		entry.Size = UDim2.new(1, -4, 0, math.max(60, h))
+	end
+	notesLabel:GetPropertyChangedSignal("TextBounds"):Connect(updateEntrySize)
+	task.spawn(updateEntrySize)
+end
+
+-- Update entries — add as many as you want!
+addUpdateEntry("v1.2.0", "2026-07-13", "• Added Feedback page\n• Players can now submit feedback directly to the hub owner for him to read and respond to\n• Feedback form includes username, script selection dropdown, and feedback text area\n• All 3 fields are required with validation\n• Automatically detects game name, executor, player info, and more\n• Added rules section to prevent abuse\n• Feedback page is the last sidebar button\n• Fixed dropdown visibility - all options now display correctly\n• Improved executor detection for modern executors (Solara, JJsploit, Hydrogen)\n• Added unique feedback ID (TFL_XXXXXXXXXX format) for tracking\n• Added second webhook for simplified feedback log")
+addUpdateEntry("v1.10", "2026-07-12", "• Thank you to all of those who have supported me (Dyllan) in the making of the TFL Hub, and Scripts. and to those of you who were true friends and didn't use me for my scripts. I will not be returning, and this is my final decision. Thank you all for your support, and goodbye. - Dyllan")
+addUpdateEntry("v1.1.0", "2026-07-12", "• Added the Updates page with scrollable changelog\n• Updates page is now the first page you see when opening the hub\n• Reorganized sidebar — Updates button is now at the top.\n• Fixed noclip not working correctly, it now works fine after testing. Enjoy!")
+
+-- ============================================================================
+-- TFL HUB V2 UPDATE - 2026-07-20
+-- ============================================================================
+addUpdateEntry("v2.0.0", "2026-07-20", "• **MAJOR OPTIMIZATION UPDATE**\n\n**Use Tools.lua:**\n• Fixed critical syntax errors and undefined function calls\n• Instant tool activation on enable - no delays\n• Single equip on activation, no re-equipping loops\n• PreSimulation timing for maximum responsiveness\n• Pre-allocated buffers to reduce GC pressure\n• Optimized Guide() function with minimal delay for respawn\n• Removed burst firing to prevent network overflow\n\n**Tool Grabber.lua:**\n• Removed excessive thread spawning (task.spawn)\n• Batched touch events instead of parallel threads\n• Better connection management\n• Immediate tool acquisition on character spawn\n\n**Kill Aura.lua:**\n• Fixed syntax error `if part or then`\n• Fixed extra `end` statement\n• PreSimulation timing for better responsiveness\n• Pre-allocated target parts buffer\n\n**Damage.lua:**\n• Added player caching to reduce per-frame iteration\n• Only runs when enabled\n• Smart cache invalidation\n\n**Loop Tools.lua:**\n• Removed `task.wait(0.1)` and `task.wait(0.05)` delays\n• PreSimulation timing\n• Immediate tool cache updates\n\n**Loopbring.lua:**\n• Fixed `+=` operator syntax errors\n• PreSimulation timing\n• Better connection management\n\n**Loopkill.lua:**\n• PreSimulation timing\n• Connection management\n• Removed unnecessary delays\n\n**Anti-Aura Shield.lua:**\n• Added proper connection tracking\n• PreSimulation timing\n• Cleanup function for memory management\n\n**Damage Amplifier Field.lua:**\n• PreSimulation timing\n• Connection management\n• Cleanup function\n\n**Hit Amplifier.lua:**\n• PreSimulation timing\n• Better tool caching\n• Connection management\n\n**Insta-Kill.lua:**\n• Reduced spawn burst time (2.0s → 0.5s)\n• Reduced burst count (10 → 5)\n• PreSimulation timing\n• Pre-allocated buffers\n\n**Get Base.lua:**\n• Added rate limiting (0.5s interval)\n• PreSimulation timing\n• Connection management\n\n**Grip.lua:**\n• PreSimulation timing\n• Removed `wait(1)` delay\n• Better tool handling\n\n**Axe Smash.lua:**\n• PreSimulation timing\n• Cached tool/remote lookups\n• Connection management\n\n**Respawn.lua:**\n• Added Guide() integration for instant re-equip\n• Added cooldown to prevent multi-firing (0.3s)\n• Heartbeat wait for better ping handling\n• Network-efficient respawn\n\nAll scripts now follow professional Roblox Luau engineering practices with maximum responsiveness, minimal CPU usage, network stability, and proper cleanup.")
+
 -- Tools / Player / Other / Settings pages: preserved
 local toolsPage = createPage("Tool Scripts")
 local toolsHeader = Instance.new("TextLabel")
@@ -838,6 +989,8 @@ oHeader.Parent = otherPage
 
 local otherScripts = {
 	{"Infinite Yield", "https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"},
+	{"Anti-Aura", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Anti-Aura%20Shield.lua"},
+	{"Damage Amplifier", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Damage%20Amplifier%20Field.lua"},
 	{"Grip", "https://raw.githubusercontent.com/iamrobloxstudio/OG1-Hub-Scripts/refs/heads/main/Grip.lua"},
 	{"Axe Smash Spam", "https://pastefy.app/CvywWIZ9/raw"},
 	{"Emote GUI", "https://pastefy.app/T4YoBRGj/raw"},
@@ -1016,12 +1169,691 @@ rejoinBtn.MouseButton1Click:Connect(function()
 	TeleportService:Teleport(game.PlaceId, LocalPlayer)
 end)
 
--- ======= Sidebar build (kept) =======
-local btnWelcome = createSidebarButton("Welcome", 1); btnWelcome.SetAccent(true)
-local btnTools = createSidebarButton("Tool Scripts", 2)
-local btnPlayer = createSidebarButton("Player Scripts", 3)
-local btnOther = createSidebarButton("Other Scripts", 4)
-local btnSettings = createSidebarButton("Settings", 5)
+-- ======= Feedback page with Discord webhook =======
+local MarketplaceService = game:GetService("MarketplaceService")
+local feedbackConnections = {}
+
+local function cleanupFeedback()
+	for _, conn in ipairs(feedbackConnections) do
+		pcall(function() conn:Disconnect() end)
+	end
+	table.clear(feedbackConnections)
+end
+
+-- Override showPage to add cleanup when leaving Feedback page
+local origShowPage = showPage
+showPage = function(name)
+	if currentPageName == "Feedback" and name ~= "Feedback" then
+		cleanupFeedback()
+	end
+	origShowPage(name)
+end
+
+local fbPage = createPage("Feedback")
+local fbContent = Instance.new("ScrollingFrame")
+fbContent.Size = UDim2.new(1, 0, 1, 0)
+fbContent.BackgroundTransparency = 1
+fbContent.ScrollBarThickness = 8
+fbContent.CanvasSize = UDim2.new(0, 0, 0, 0)
+fbContent.AutomaticCanvasSize = Enum.AutomaticSize.Y
+fbContent.Parent = fbPage
+
+local fbLayout = Instance.new("UIListLayout")
+fbLayout.Padding = UDim.new(0, 10)
+fbLayout.SortOrder = Enum.SortOrder.LayoutOrder
+fbLayout.Parent = fbContent
+
+local fbPadding = Instance.new("UIPadding")
+fbPadding.PaddingTop = UDim.new(0, 6)
+fbPadding.PaddingLeft = UDim.new(0, 6)
+fbPadding.PaddingRight = UDim.new(0, 6)
+fbPadding.Parent = fbContent
+
+-- Helper to create a styled input section
+local function createInputSection(title, hint)
+	local section = Instance.new("Frame")
+	section.Size = UDim2.new(1, -4, 0, 0)
+	section.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+	section.BorderSizePixel = 0
+	section.AutomaticSize = Enum.AutomaticSize.Y
+	section.Parent = fbContent
+	addRound(section, UDim.new(0, 10))
+	addStroke(section, DEFAULT_THEME.Accent, 1)
+
+	local titleLabel = Instance.new("TextLabel")
+	titleLabel.Size = UDim2.new(1, -20, 0, 30)
+	titleLabel.Position = UDim2.new(0, 10, 0, 6)
+	titleLabel.BackgroundTransparency = 1
+	titleLabel.Font = Enum.Font.Code
+	titleLabel.TextSize = 17
+	titleLabel.TextColor3 = DEFAULT_THEME.Accent
+	titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+	titleLabel.TextYAlignment = Enum.TextYAlignment.Center
+	titleLabel.Text = title
+	titleLabel.Parent = section
+
+	if hint then
+		local hintLabel = Instance.new("TextLabel")
+		hintLabel.Size = UDim2.new(1, -20, 0, 20)
+		hintLabel.Position = UDim2.new(0, 10, 0, 30)
+		hintLabel.BackgroundTransparency = 1
+		hintLabel.Font = Enum.Font.Code
+		hintLabel.TextSize = 12
+		hintLabel.TextColor3 = DEFAULT_THEME.Muted
+		hintLabel.TextXAlignment = Enum.TextXAlignment.Left
+		hintLabel.TextYAlignment = Enum.TextYAlignment.Top
+		hintLabel.Text = hint
+		hintLabel.Parent = section
+	end
+
+	return section
+end
+
+-- Rules section
+local rulesSection = Instance.new("Frame")
+rulesSection.Size = UDim2.new(1, -4, 0, 0)
+rulesSection.BackgroundColor3 = Color3.fromRGB(5, 15, 5)
+rulesSection.BorderSizePixel = 0
+rulesSection.AutomaticSize = Enum.AutomaticSize.Y
+rulesSection.Parent = fbContent
+addRound(rulesSection, UDim.new(0, 10))
+addStroke(rulesSection, DEFAULT_THEME.Muted, 0.5)
+
+local rulesTitle = Instance.new("TextLabel")
+rulesTitle.Size = UDim2.new(1, -20, 0, 26)
+rulesTitle.Position = UDim2.new(0, 10, 0, 6)
+rulesTitle.BackgroundTransparency = 1
+rulesTitle.Font = Enum.Font.Code
+rulesTitle.TextSize = 16
+rulesTitle.TextColor3 = DEFAULT_THEME.Accent
+rulesTitle.TextXAlignment = Enum.TextXAlignment.Left
+rulesTitle.Text = "📋 Feedback Rules"
+rulesTitle.Parent = rulesSection
+
+local rulesText = Instance.new("TextLabel")
+rulesText.Size = UDim2.new(1, -20, 0, 0)
+rulesText.Position = UDim2.new(0, 10, 0, 34)
+rulesText.BackgroundTransparency = 1
+rulesText.Font = Enum.Font.Code
+rulesText.TextSize = 14
+rulesText.TextColor3 = DEFAULT_THEME.Muted
+rulesText.TextXAlignment = Enum.TextXAlignment.Left
+rulesText.TextYAlignment = Enum.TextYAlignment.Top
+rulesText.TextWrapped = true
+rulesText.AutomaticSize = Enum.AutomaticSize.Y
+rulesText.Text = "• Do NOT submit spam, false, or troll feedback.\n• Be respectful and constructive with your feedback.\n• All submissions are logged with your username, Place ID, and Job ID.\n• Abuse of this system may result in restricted access.\n• By submitting, you agree to provide honest and helpful feedback."
+rulesText.Parent = rulesSection
+
+-- Username input
+local nameSection = createInputSection("Username", "Enter your in-game username (required)")
+local nameBox = Instance.new("TextBox")
+nameBox.Size = UDim2.new(1, -20, 0, 36)
+nameBox.Position = UDim2.new(0, 10, 0, 52)
+nameBox.BackgroundColor3 = Color3.fromRGB(0, 10, 0)
+nameBox.PlaceholderText = "Your username..."
+nameBox.Text = ""
+nameBox.ClearTextOnFocus = false
+nameBox.Font = Enum.Font.Code
+nameBox.TextSize = 16
+nameBox.TextColor3 = DEFAULT_THEME.Text
+nameBox.PlaceholderColor3 = DEFAULT_THEME.Muted
+nameBox.Parent = nameSection
+addRound(nameBox, UDim.new(0, 8))
+addStroke(nameBox, DEFAULT_THEME.Accent, 1)
+
+-- Reason for feedback dropdown
+local reasonSection = createInputSection("Reason for Feedback", "Select the reason for your submission (required)")
+local reasonOptions = {
+	"-- Select a Reason --", "Script Bug Report", "Script Suggestion", "General Feedback", "Other"
+}
+local selectedReason = reasonOptions[1]
+local reasonDropdownOpen = false
+local reasonDropdownFrame
+
+local reasonBtn = Instance.new("TextButton")
+reasonBtn.Size = UDim2.new(1, -20, 0, 36)
+reasonBtn.Position = UDim2.new(0, 10, 0, 52)
+reasonBtn.BackgroundColor3 = Color3.fromRGB(0, 10, 0)
+reasonBtn.AutoButtonColor = false
+reasonBtn.Font = Enum.Font.Code
+reasonBtn.TextSize = 16
+reasonBtn.TextColor3 = DEFAULT_THEME.Muted
+reasonBtn.TextXAlignment = Enum.TextXAlignment.Left
+reasonBtn.Text = "  " .. reasonOptions[1]
+reasonBtn.Parent = reasonSection
+addRound(reasonBtn, UDim.new(0, 8))
+addStroke(reasonBtn, DEFAULT_THEME.Accent, 1)
+
+local reasonArrow = Instance.new("TextLabel")
+reasonArrow.Size = UDim2.new(0, 30, 1, 0)
+reasonArrow.Position = UDim2.new(1, -34, 0, 0)
+reasonArrow.BackgroundTransparency = 1
+reasonArrow.Font = Enum.Font.Code
+reasonArrow.TextSize = 18
+reasonArrow.TextColor3 = DEFAULT_THEME.Accent
+reasonArrow.TextXAlignment = Enum.TextXAlignment.Center
+reasonArrow.TextYAlignment = Enum.TextYAlignment.Center
+reasonArrow.Text = "▼"
+reasonArrow.Parent = reasonBtn
+
+local function closeReasonDropdown()
+	if reasonDropdownFrame then
+		reasonDropdownFrame:Destroy()
+		reasonDropdownFrame = nil
+	end
+	reasonDropdownOpen = false
+	reasonArrow.Text = "▼"
+end
+
+local function openReasonDropdown()
+	if reasonDropdownOpen then
+		closeReasonDropdown()
+		return
+	end
+	reasonDropdownOpen = true
+	reasonArrow.Text = "▲"
+
+	reasonDropdownFrame = Instance.new("Frame")
+	reasonDropdownFrame.Size = UDim2.new(1, 0, 0, 0)
+	reasonDropdownFrame.Position = UDim2.new(0, 0, 1, 4)
+	reasonDropdownFrame.BackgroundColor3 = Color3.fromRGB(0, 15, 0)
+	reasonDropdownFrame.BorderSizePixel = 0
+	reasonDropdownFrame.ZIndex = 10
+	reasonDropdownFrame.Parent = reasonBtn
+	addRound(reasonDropdownFrame, UDim.new(0, 8))
+	addStroke(reasonDropdownFrame, DEFAULT_THEME.Accent, 1)
+
+	local rLayout = Instance.new("UIListLayout")
+	rLayout.Padding = UDim.new(0, 2)
+	rLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rLayout.Parent = reasonDropdownFrame
+
+	local rMaxVisible = math.min(#reasonOptions, 6)
+	local rItemHeight = 32
+	reasonDropdownFrame.Size = UDim2.new(1, 0, 0, rMaxVisible * rItemHeight + 8)
+
+	local rClip = Instance.new("Frame")
+	rClip.Size = UDim2.new(1, 0, 0, rMaxVisible * rItemHeight + 4)
+	rClip.BackgroundTransparency = 1
+	rClip.ClipsDescendants = true
+	rClip.Parent = reasonDropdownFrame
+
+	local rScroll = Instance.new("ScrollingFrame")
+	rScroll.Size = UDim2.new(1, 0, 1, 0)
+	rScroll.BackgroundTransparency = 1
+	rScroll.ScrollBarThickness = 6
+	rScroll.CanvasSize = UDim2.new(0, 0, 0, #reasonOptions * rItemHeight)
+	rScroll.BorderSizePixel = 0
+	rScroll.Parent = rClip
+
+	local rItemLayout = Instance.new("UIListLayout")
+	rItemLayout.Padding = UDim.new(0, 1)
+	rItemLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	rItemLayout.Parent = rScroll
+
+		for _, opt in ipairs(reasonOptions) do
+			local item = Instance.new("TextButton")
+			item.Size = UDim2.new(1, -4, 0, rItemHeight)
+			item.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+			item.AutoButtonColor = false
+			item.Font = Enum.Font.Code
+			item.TextSize = 14
+			item.TextColor3 = opt == reasonOptions[1] and DEFAULT_THEME.Muted or DEFAULT_THEME.Text
+			item.TextXAlignment = Enum.TextXAlignment.Left
+			item.TextYAlignment = Enum.TextYAlignment.Center
+			item.Text = "  " .. opt
+			item.ZIndex = 15
+			item.Parent = rScroll
+			addRound(item, UDim.new(0, 4))
+
+		item.MouseEnter:Connect(function()
+			tw(item, {BackgroundColor3 = Color3.fromRGB(0, 40, 0)}, 0.08):Play()
+		end)
+		item.MouseLeave:Connect(function()
+			tw(item, {BackgroundColor3 = Color3.fromRGB(0, 20, 0)}, 0.08):Play()
+		end)
+		item.MouseButton1Click:Connect(function()
+			selectedReason = opt
+			reasonBtn.Text = "  " .. opt
+			reasonBtn.TextColor3 = opt == reasonOptions[1] and DEFAULT_THEME.Muted or DEFAULT_THEME.Text
+			closeReasonDropdown()
+			-- Show/hide script dropdown based on reason
+			if opt == "Script Bug Report" or opt == "Script Suggestion" then
+				scriptSection.Visible = true
+			else
+				scriptSection.Visible = false
+				selectedScript = scriptOptions[1]
+				scriptBtn.Text = "  " .. scriptOptions[1]
+				scriptBtn.TextColor3 = DEFAULT_THEME.Muted
+			end
+		end)
+	end
+end
+
+reasonBtn.MouseButton1Click:Connect(function()
+	openReasonDropdown()
+end)
+
+-- Affected Script dropdown (conditionally visible)
+local scriptSection = createInputSection("Affected Script", "Select the script this relates to (optional)")
+scriptSection.Visible = false
+local scriptOptions = {
+	"-- Not specified --", "The Hub", "Get Base", "Respawn", "Tool Grabber",
+	"No Cooldown", "Insta-Kill", "Use Tools", "Hit Amplifier", "Loop Tools",
+	"Hitbox", "Loopbring", "Kill Aura", "Loopkill", "Anti-Lag",
+	"Infinite Yield", "Grip", "Axe Smash Spam", "Emote GUI",
+	"Anti-Aura Shield", "Damage Amplifier Field", "Fling"
+}
+local selectedScript = scriptOptions[1]
+local scriptDropdownOpen = false
+local scriptDropdownFrame
+
+local scriptBtn = Instance.new("TextButton")
+scriptBtn.Size = UDim2.new(1, -20, 0, 36)
+scriptBtn.Position = UDim2.new(0, 10, 0, 52)
+scriptBtn.BackgroundColor3 = Color3.fromRGB(0, 10, 0)
+scriptBtn.AutoButtonColor = false
+scriptBtn.Font = Enum.Font.Code
+scriptBtn.TextSize = 16
+scriptBtn.TextColor3 = DEFAULT_THEME.Muted
+scriptBtn.TextXAlignment = Enum.TextXAlignment.Left
+scriptBtn.Text = "  " .. scriptOptions[1]
+scriptBtn.Parent = scriptSection
+addRound(scriptBtn, UDim.new(0, 8))
+addStroke(scriptBtn, DEFAULT_THEME.Accent, 1)
+
+local scriptArrow = Instance.new("TextLabel")
+scriptArrow.Size = UDim2.new(0, 30, 1, 0)
+scriptArrow.Position = UDim2.new(1, -34, 0, 0)
+scriptArrow.BackgroundTransparency = 1
+scriptArrow.Font = Enum.Font.Code
+scriptArrow.TextSize = 18
+scriptArrow.TextColor3 = DEFAULT_THEME.Accent
+scriptArrow.TextXAlignment = Enum.TextXAlignment.Center
+scriptArrow.TextYAlignment = Enum.TextYAlignment.Center
+scriptArrow.Text = "▼"
+scriptArrow.Parent = scriptBtn
+
+local function closeScriptDropdown()
+	if scriptDropdownFrame then
+		scriptDropdownFrame:Destroy()
+		scriptDropdownFrame = nil
+	end
+	scriptDropdownOpen = false
+	scriptArrow.Text = "▼"
+end
+
+local function openScriptDropdown()
+	if scriptDropdownOpen then
+		closeScriptDropdown()
+		return
+	end
+	scriptDropdownOpen = true
+	scriptArrow.Text = "▲"
+
+	scriptDropdownFrame = Instance.new("Frame")
+	scriptDropdownFrame.Size = UDim2.new(1, 0, 0, 0)
+	scriptDropdownFrame.Position = UDim2.new(0, 0, 1, 4)
+	scriptDropdownFrame.BackgroundColor3 = Color3.fromRGB(0, 15, 0)
+	scriptDropdownFrame.BorderSizePixel = 0
+	scriptDropdownFrame.ZIndex = 10
+	scriptDropdownFrame.Parent = scriptBtn
+	addRound(scriptDropdownFrame, UDim.new(0, 8))
+	addStroke(scriptDropdownFrame, DEFAULT_THEME.Accent, 1)
+
+	local sLayout = Instance.new("UIListLayout")
+	sLayout.Padding = UDim.new(0, 2)
+	sLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	sLayout.Parent = scriptDropdownFrame
+
+	local sMaxVisible = math.min(#scriptOptions, 8)
+	local sItemHeight = 32
+	scriptDropdownFrame.Size = UDim2.new(1, 0, 0, sMaxVisible * sItemHeight + 8)
+
+	local sClip = Instance.new("Frame")
+	sClip.Size = UDim2.new(1, 0, 0, sMaxVisible * sItemHeight + 4)
+	sClip.BackgroundTransparency = 1
+	sClip.ClipsDescendants = true
+	sClip.Parent = scriptDropdownFrame
+
+	local sScroll = Instance.new("ScrollingFrame")
+	sScroll.Size = UDim2.new(1, 0, 1, 0)
+	sScroll.BackgroundTransparency = 1
+	sScroll.ScrollBarThickness = 6
+	sScroll.CanvasSize = UDim2.new(0, 0, 0, #scriptOptions * sItemHeight)
+	sScroll.BorderSizePixel = 0
+	sScroll.Parent = sClip
+
+	local sItemLayout = Instance.new("UIListLayout")
+	sItemLayout.Padding = UDim.new(0, 1)
+	sItemLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	sItemLayout.Parent = sScroll
+
+	for _, opt in ipairs(scriptOptions) do
+		local item = Instance.new("TextButton")
+		item.Size = UDim2.new(1, -4, 0, sItemHeight)
+		item.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+		item.AutoButtonColor = false
+		item.Font = Enum.Font.Code
+		item.TextSize = 14
+		item.TextColor3 = opt == scriptOptions[1] and DEFAULT_THEME.Muted or DEFAULT_THEME.Text
+		item.TextXAlignment = Enum.TextXAlignment.Left
+		item.TextYAlignment = Enum.TextYAlignment.Center
+		item.Text = "  " .. opt
+		item.ZIndex = 15
+		item.Parent = sScroll
+		addRound(item, UDim.new(0, 4))
+
+		item.MouseEnter:Connect(function()
+			tw(item, {BackgroundColor3 = Color3.fromRGB(0, 40, 0)}, 0.08):Play()
+		end)
+		item.MouseLeave:Connect(function()
+			tw(item, {BackgroundColor3 = Color3.fromRGB(0, 20, 0)}, 0.08):Play()
+		end)
+		item.MouseButton1Click:Connect(function()
+			selectedScript = opt
+			scriptBtn.Text = "  " .. opt
+			scriptBtn.TextColor3 = opt == scriptOptions[1] and DEFAULT_THEME.Muted or DEFAULT_THEME.Text
+			closeScriptDropdown()
+		end)
+	end
+end
+
+scriptBtn.MouseButton1Click:Connect(function()
+	openScriptDropdown()
+end)
+
+-- Close dropdowns if user clicks elsewhere
+table.insert(feedbackConnections, UserInputService.InputBegan:Connect(function(input, gpe)
+	if gpe then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		-- Close reason dropdown
+		if reasonDropdownOpen and reasonDropdownFrame then
+			local pos = UserInputService:GetMouseLocation()
+			local absPos = reasonBtn.AbsolutePosition
+			local absSize = reasonBtn.AbsoluteSize
+			local ddPos = reasonDropdownFrame.AbsolutePosition
+			local ddSize = reasonDropdownFrame.AbsoluteSize
+			local inBtn = pos.X >= absPos.X and pos.X <= absPos.X + absSize.X and pos.Y >= absPos.Y and pos.Y <= absPos.Y + absSize.Y
+			local inDD = pos.X >= ddPos.X and pos.X <= ddPos.X + ddSize.X and pos.Y >= ddPos.Y and pos.Y <= ddPos.Y + ddSize.Y
+			if not inBtn and not inDD then
+				closeReasonDropdown()
+			end
+		end
+		-- Close script dropdown
+		if scriptDropdownOpen and scriptDropdownFrame then
+			local pos = UserInputService:GetMouseLocation()
+			local absPos = scriptBtn.AbsolutePosition
+			local absSize = scriptBtn.AbsoluteSize
+			local ddPos = scriptDropdownFrame.AbsolutePosition
+			local ddSize = scriptDropdownFrame.AbsoluteSize
+			local inBtn = pos.X >= absPos.X and pos.X <= absPos.X + absSize.X and pos.Y >= absPos.Y and pos.Y <= absPos.Y + absSize.Y
+			local inDD = pos.X >= ddPos.X and pos.X <= ddPos.X + ddSize.X and pos.Y >= ddPos.Y and pos.Y <= ddPos.Y + ddSize.Y
+			if not inBtn and not inDD then
+				closeScriptDropdown()
+			end
+		end
+	end
+end))
+
+-- Feedback text area
+local fbSection = createInputSection("Feedback", "Write your detailed feedback here (required)")
+local fbBox = Instance.new("TextBox")
+fbBox.Size = UDim2.new(1, -20, 0, 120)
+fbBox.Position = UDim2.new(0, 10, 0, 52)
+fbBox.BackgroundColor3 = Color3.fromRGB(0, 10, 0)
+fbBox.PlaceholderText = "Type your feedback here..."
+fbBox.Text = ""
+fbBox.ClearTextOnFocus = false
+fbBox.Font = Enum.Font.Code
+fbBox.TextSize = 16
+fbBox.TextColor3 = DEFAULT_THEME.Text
+fbBox.PlaceholderColor3 = DEFAULT_THEME.Muted
+fbBox.TextXAlignment = Enum.TextXAlignment.Left
+fbBox.TextYAlignment = Enum.TextYAlignment.Top
+fbBox.MultiLine = true
+fbBox.Parent = fbSection
+addRound(fbBox, UDim.new(0, 8))
+addStroke(fbBox, DEFAULT_THEME.Accent, 1)
+
+-- Character count
+local charCount = Instance.new("TextLabel")
+charCount.Size = UDim2.new(1, -24, 0, 20)
+charCount.Position = UDim2.new(0, 12, 0, 172)
+charCount.BackgroundTransparency = 1
+charCount.Font = Enum.Font.Code
+charCount.TextSize = 12
+charCount.TextColor3 = DEFAULT_THEME.Muted
+charCount.TextXAlignment = Enum.TextXAlignment.Right
+charCount.Text = "0 / 2000"
+charCount.Parent = fbSection
+
+fbBox:GetPropertyChangedSignal("Text"):Connect(function()
+	local len = #fbBox.Text
+	if len > 2000 then
+		fbBox.Text = fbBox.Text:sub(1, 2000)
+		len = 2000
+	end
+	charCount.Text = len .. " / 2000"
+end)
+
+-- Submit button
+local submitBtnFrame = Instance.new("Frame")
+submitBtnFrame.Size = UDim2.new(1, -4, 0, 0)
+submitBtnFrame.BackgroundTransparency = 1
+submitBtnFrame.AutomaticSize = Enum.AutomaticSize.Y
+submitBtnFrame.Parent = fbContent
+
+local submitBtn = Instance.new("TextButton")
+submitBtn.Size = UDim2.new(0, 260, 0, 48)
+submitBtn.Position = UDim2.new(0.5, -130, 0, 6)
+submitBtn.BackgroundColor3 = Color3.fromRGB(0, 20, 0)
+submitBtn.AutoButtonColor = false
+submitBtn.Font = Enum.Font.Code
+submitBtn.TextSize = 20
+submitBtn.TextColor3 = DEFAULT_THEME.Accent
+submitBtn.Text = "▶  SUBMIT FEEDBACK"
+submitBtn.Parent = submitBtnFrame
+addRound(submitBtn, UDim.new(0, 12))
+addStroke(submitBtn, DEFAULT_THEME.Accent, 2)
+
+-- Submit button animations
+submitBtn.MouseEnter:Connect(function()
+	tw(submitBtn, {BackgroundColor3 = Color3.fromRGB(0, 40, 0)}, 0.12):Play()
+	tw(submitBtn, {Size = UDim2.new(0, 270, 0, 52)}, 0.12):Play()
+	submitBtn.Position = UDim2.new(0.5, -135, 0, 6)
+end)
+submitBtn.MouseLeave:Connect(function()
+	tw(submitBtn, {BackgroundColor3 = Color3.fromRGB(0, 20, 0)}, 0.12):Play()
+	tw(submitBtn, {Size = UDim2.new(0, 260, 0, 48)}, 0.12):Play()
+	submitBtn.Position = UDim2.new(0.5, -130, 0, 6)
+end)
+
+-- Generate unique feedback ID (TFL_XXXXXXXXXX - max 14 chars total)
+local function generateFeedbackId()
+	math.randomseed(tick() + os.clock() + math.random(1, 99999))
+	local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	local id = "TFL_"
+	for i = 1, 10 do
+		id = id .. chars:sub(math.random(1, #chars), math.random(1, #chars))
+	end
+	return id
+end
+
+-- Submit logic
+local isSubmitting = false
+submitBtn.MouseButton1Click:Connect(function()
+	if isSubmitting then return end
+
+	-- Validate fields
+	local username = nameBox.Text:match("^%s*(.-)%s*$") or ""
+	local feedback = fbBox.Text:match("^%s*(.-)%s*$") or ""
+	if username == "" or feedback == "" or selectedReason == reasonOptions[1] then
+		showToast("⚠️ Please fill in all required fields before submitting!", 3, false)
+		return
+	end
+
+	isSubmitting = true
+	submitBtn.Text = "⏳  SENDING..."
+	submitBtn.TextColor3 = DEFAULT_THEME.Muted
+
+	local feedbackId = generateFeedbackId()
+
+	task.spawn(function()
+		-- Detect executor with improved fallback detection
+		local executor = "Unknown"
+		local execName = getexecutorname and getexecutorname() or nil
+		if execName and type(execName) == "string" and execName ~= "" then
+			executor = execName
+		else
+			local ok, result = pcall(function()
+				return identifyexecutor()
+			end)
+			if ok and type(result) == "table" then
+				executor = result.name or result[1] or "Unknown"
+			elseif ok and type(result) == "string" then
+				executor = result
+			end
+		end
+		if executor == "Unknown" then
+			local executorChecks = {
+				{ syn and syn.crypt, "Synapse" },
+				{ is_sirhurt_closure and is_sirhurt_closure(), "SirHurt" },
+				{ pebc_execute, "ProtoSmasher" },
+				{ KRNL_LOADED, "Krnl" },
+				{ VALVE_LOADED, "Valve" },
+				{ FLUXUS_LOADED, "Fluxus" },
+				{ OXYGEN_LOADED, "Oxygen U" },
+				{ SENTINEL_LOADED, "Sentinel" },
+				{ SCRIPTWARE_LOADED, "Script-Ware" },
+				{ EV_LOADED, "Eclipse" },
+				{ VEGA_LOADED, "Vega X" },
+				{ SOLARA_LOADED, "Solara" },
+				{ JJS_LOADED, "JJsploit" },
+				{ HYDROGEN_LOADED, "Hydrogen" },
+			}
+			for _, check in ipairs(executorChecks) do
+				if check[1] then
+					executor = check[2]
+					break
+				end
+			end
+		end
+
+		-- Get game info
+		local gameName = "Unknown"
+		local ok3, productInfo = pcall(function()
+			return MarketplaceService:GetProductInfo(game.PlaceId)
+		end)
+		if ok3 and type(productInfo) == "table" then
+			gameName = productInfo.Name or "Unknown"
+		end
+
+		local playerName = LocalPlayer.Name
+		local displayName = LocalPlayer.DisplayName
+		local dateStr = os.date("%Y-%m-%d %H:%M:%S")
+
+		-- Build script info string
+		local scriptInfo = selectedScript
+		if selectedScript == scriptOptions[1] then
+			scriptInfo = "Not specified"
+		end
+
+		-- Build Discord embed
+		local embed = {
+			{
+				["title"] = "📬 New Feedback [" .. feedbackId .. "]",
+				["color"] = 65535,
+				["fields"] = {
+					{["name"] = "Feedback ID", ["value"] = tostring(feedbackId), ["inline"] = false},
+					{["name"] = "Game", ["value"] = tostring(gameName), ["inline"] = true},
+					{["name"] = "Place ID", ["value"] = tostring(game.PlaceId), ["inline"] = true},
+					{["name"] = "Job ID", ["value"] = tostring(game.JobId), ["inline"] = false},
+					{["name"] = "Player", ["value"] = tostring(displayName) .. " (@" .. tostring(playerName) .. ")", ["inline"] = true},
+					{["name"] = "Executor", ["value"] = tostring(executor), ["inline"] = true},
+					{["name"] = "Version", ["value"] = tostring(HUB_VERSION), ["inline"] = true},
+					{["name"] = "Date", ["value"] = tostring(dateStr), ["inline"] = false},
+					{["name"] = "Reason", ["value"] = tostring(selectedReason), ["inline"] = true},
+					{["name"] = "Script", ["value"] = tostring(scriptInfo), ["inline"] = true},
+					{["name"] = "Feedback", ["value"] = tostring(feedback), ["inline"] = false}
+				}
+			}
+		}
+
+		-- Use executor-compatible HTTP request
+		local httpRequest = request or http_request or (syn and syn.request)
+		if not httpRequest then
+			warn("[TFLHub] Executor does not support HTTP requests")
+			showToast("❌ Your executor does not support webhook requests.", 3, false)
+			isSubmitting = false
+			submitBtn.Text = "▶  SUBMIT FEEDBACK"
+			submitBtn.TextColor3 = DEFAULT_THEME.Accent
+			return
+		end
+
+		local success, err = pcall(function()
+			return httpRequest({
+				Url = WEBHOOK_URL,
+				Method = "POST",
+				Headers = {["Content-Type"] = "application/json"},
+				Body = HttpService:JSONEncode({embeds = embed, username = "TFL Hub Feedback", avatar_url = ""})
+			})
+		end)
+
+		if success then
+			-- Send simplified log to second webhook
+			pcall(function()
+				httpRequest({
+					Url = FEEDBACK_LOG_WEBHOOK,
+					Method = "POST",
+					Headers = {["Content-Type"] = "application/json"},
+					Body = HttpService:JSONEncode({
+						["embeds"] = {{
+							["title"] = "📝 New Feedback Submission",
+							["color"] = 30621,
+							["fields"] = {
+								{["name"] = "Username", ["value"] = tostring(displayName) .. " (@" .. tostring(playerName) .. ")", ["inline"] = true},
+								{["name"] = "Time", ["value"] = tostring(dateStr), ["inline"] = true},
+								{["name"] = "Feedback ID", ["value"] = tostring(feedbackId), ["inline"] = false}
+							},
+							["footer"] = {["text"] = "TFL Hub Feedback Log"}
+						}},
+						["username"] = "TFL Feedback Log",
+						["avatar_url"] = ""
+					})
+				})
+			end)
+
+			showToast("✅ Feedback submitted! Your ID: " .. feedbackId, 4, false)
+			nameBox.Text = ""
+			fbBox.Text = ""
+			selectedReason = reasonOptions[1]
+			reasonBtn.Text = "  " .. reasonOptions[1]
+			reasonBtn.TextColor3 = DEFAULT_THEME.Muted
+			selectedScript = scriptOptions[1]
+			scriptBtn.Text = "  " .. scriptOptions[1]
+			scriptBtn.TextColor3 = DEFAULT_THEME.Muted
+			scriptSection.Visible = false
+			charCount.Text = "0 / 2000"
+		else
+			warn("[TFLHub] Webhook failed:", err)
+			showToast("❌ Failed to submit feedback. Please try again.", 3, false)
+		end
+
+		isSubmitting = false
+		submitBtn.Text = "▶  SUBMIT FEEDBACK"
+		submitBtn.TextColor3 = DEFAULT_THEME.Accent
+	end)
+end)
+
+-- ======= Sidebar build (Updates first, then rest) =======
+local btnUpdates = createSidebarButton("Updates", 1); btnUpdates.SetAccent(true)
+local btnWelcome = createSidebarButton("Welcome", 2)
+local btnTools = createSidebarButton("Tool Scripts", 3)
+local btnPlayer = createSidebarButton("Player Scripts", 4)
+local btnOther = createSidebarButton("Other Scripts", 5)
+local btnSettings = createSidebarButton("Settings", 6)
+local btnFeedback = createSidebarButton("Feedback", 7)
 
 -- ======= Dragging (PC + Mobile) =======
 local dragging, dragInput, dragStart, startPos = false, nil, nil, nil
@@ -1093,50 +1925,26 @@ _G.TflHub = HubAPI
 
 -- Hub Animation
 local function hubOpenAnim()
-
 	fxHolder.Visible = true
-
 	blur.Enabled = true
-
-	tw(blur, {
-		Size = 24
-	}, 0.35):Play()
-
+	tw(blur, {Size = 24}, 0.35):Play()
 	local scale = uiScale.Scale or 1
 	local W, H = math.floor(920 * scale), math.floor(580 * scale)
-
 	main.Size = UDim2.new(0, math.max(320, W), 0, math.max(240, H))
 	main.Visible = true
-
 	main.Position = UDim2.new(0.5, 0, -1.2, 0)
-
-	tw(main, {
-		Position = UDim2.new(0.5, 0, 0.5, 0)
-	}, 0.35):Play()
-
-	tw(main, {
-		Size = UDim2.new(0, math.max(320, W), 0, math.max(240, H))
-	}, 0.35):Play()
+	tw(main, {Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.35):Play()
+	tw(main, {Size = UDim2.new(0, math.max(320, W), 0, math.max(240, H))}, 0.35):Play()
 end
 
 local function hubCloseAnim()
-
-	tw(blur, {
-		Size = 0
-	}, 0.25):Play()
-
-	local outTween = tw(main, {
-		Position = UDim2.new(0.5, 0, -1.2, 0),
-		Size = UDim2.new(0, 20, 0, 20)
-	}, 0.28)
-
+	tw(blur, {Size = 0}, 0.25):Play()
+	local outTween = tw(main, {Position = UDim2.new(0.5, 0, -1.2, 0), Size = UDim2.new(0, 20, 0, 20)}, 0.28)
 	outTween:Play()
-
 	task.delay(0.25, function()
 		blur.Enabled = false
 		fxHolder.Visible = false
 	end)
-
 	task.delay(0.28, function()
 		main.Visible = false
 	end)
@@ -1156,12 +1964,9 @@ end
 
 -- Safety: ensure main & screenGui exist
 if screenGui and main and toggleHub then
-
 	local toggleButton = Instance.new("TextButton")
 	toggleButton.Name = "HubToggle"
 	toggleButton.Parent = screenGui
-
-	-- Position: Left Middle, slightly below chat bar
 	toggleButton.Size = UDim2.new(0, 130, 0, 46)
 	toggleButton.Position = UDim2.new(0, 25, 0.5, -60)
 	toggleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
@@ -1172,10 +1977,7 @@ if screenGui and main and toggleHub then
 	toggleButton.TextColor3 = Color3.fromRGB(0, 255, 0)
 	addRound(toggleButton, DEFAULT_THEME.Radius)
 	addStroke(toggleButton, DEFAULT_THEME.Accent)
-	
-	-- Hover FX
 
-	-- Hub Toggle
 	toggleButton.MouseButton1Click:Connect(function()
 		toggleHub()
 	end)
@@ -1202,30 +2004,12 @@ if not _G.TflHub_FirstSeen then
 end
 
 -- ======= Finalize and initial print =======
-showPage("Welcome")
+showPage("Updates")
 
--- ============================================================================
--- 🔥 TFL AUTO NOCLIP V2
--- Lightweight Infinite Yield style noclip
--- Doesn't modify Massless
--- Doesn't touch Tool Handles
--- Automatically reapplies when needed
--- ============================================================================
-
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-
-local LocalPlayer = Players.LocalPlayer
-
+-- ======= Noclip (preserved) =======
 local noclipEnabled = true
-
 local originalCollision = {}
 local watchedConnections = {}
-
-----------------------------------------------------------
--- Cleanup old character connections
-----------------------------------------------------------
 
 local function disconnectWatchers()
 	for _,conn in ipairs(watchedConnections) do
@@ -1234,30 +2018,14 @@ local function disconnectWatchers()
 	table.clear(watchedConnections)
 end
 
-----------------------------------------------------------
--- Apply noclip to ONE part
-----------------------------------------------------------
-
 local function applyPart(part)
-	if not part:IsA("BasePart") then
-		return
-	end
-
-	-- Ignore Tool Handles entirely
-	if part:FindFirstAncestorOfClass("Tool") then
-		return
-	end
-
+	if not part:IsA("BasePart") then return end
+	if part:FindFirstAncestorOfClass("Tool") then return end
 	if originalCollision[part] == nil then
 		originalCollision[part] = part.CanCollide
 	end
-
 	part.CanCollide = false
 end
-
-----------------------------------------------------------
--- Restore ONE part
-----------------------------------------------------------
 
 local function restorePart(part)
 	local original = originalCollision[part]
@@ -1267,58 +2035,33 @@ local function restorePart(part)
 	originalCollision[part] = nil
 end
 
-----------------------------------------------------------
--- Apply noclip to character
-----------------------------------------------------------
-
 local function applyCharacter(character)
-
 	for _,obj in ipairs(character:GetDescendants()) do
 		if obj:IsA("BasePart") then
 			applyPart(obj)
 		end
 	end
-
 	table.insert(watchedConnections,
-
 		character.DescendantAdded:Connect(function(obj)
-
 			if noclipEnabled and obj:IsA("BasePart") then
 				applyPart(obj)
 			end
-
 		end)
-
 	)
-
 end
 
-----------------------------------------------------------
--- Restore character
-----------------------------------------------------------
-
 local function restoreCharacter()
-
 	for part,_ in pairs(originalCollision) do
 		restorePart(part)
 	end
-
 	table.clear(originalCollision)
-
 end
 
-----------------------------------------------------------
--- Character handling
-----------------------------------------------------------
-
 local function onCharacter(character)
-
 	disconnectWatchers()
-
 	if noclipEnabled then
 		applyCharacter(character)
 	end
-
 end
 
 if LocalPlayer.Character then
@@ -1326,88 +2069,41 @@ if LocalPlayer.Character then
 end
 
 LocalPlayer.CharacterAdded:Connect(function(character)
-
 	task.wait(0.2)
-
 	onCharacter(character)
-
 end)
-
-----------------------------------------------------------
--- Maintenance loop
-----------------------------------------------------------
 
 RunService.Heartbeat:Connect(function()
-
-	if not noclipEnabled then
-		return
-	end
-
+	if not noclipEnabled then return end
 	local character = LocalPlayer.Character
-	if not character then
-		return
-	end
-
+	if not character then return end
 	for part in pairs(originalCollision) do
-
 		if not part.Parent then
-
 			originalCollision[part] = nil
-
 		elseif part.CanCollide then
-
 			part.CanCollide = false
-
 		end
-
 	end
-
 end)
 
-----------------------------------------------------------
--- Toggle
-----------------------------------------------------------
-
 local function setNoclip(state)
-
 	noclipEnabled = state
-
 	local character = LocalPlayer.Character
-	if not character then
-		return
-	end
-
+	if not character then return end
 	if state then
-
 		applyCharacter(character)
-
 	else
-
 		restoreCharacter()
-
 	end
-
 end
 
 UserInputService.InputBegan:Connect(function(input,gpe)
-
-	if gpe then
-		return
-	end
-
+	if gpe then return end
 	if input.KeyCode == Enum.KeyCode.N then
-
 		setNoclip(not noclipEnabled)
-
 	end
-
 end)
 
-----------------------------------------------------------
--- Enable automatically
-----------------------------------------------------------
-
 setNoclip(true)
-
 
 print("TFL Hub + Auto-Noclip Initialized")
