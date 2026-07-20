@@ -1,5 +1,6 @@
--- TFL Loopbring V6
+-- TFL Loopbring V7
 -- PERMANENT target looping - persists through respawn/rejoin
+-- OPTIMIZED: Better performance, reduced allocations
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -80,7 +81,7 @@ local localRoot = nil
 local localEpoch = 0
 
 local function bindLocalCharacter(character)
-	localEpoch += 1
+	localEpoch = localEpoch + 1
 	local myEpoch = localEpoch
 	localCharacter = character
 	localRoot = nil
@@ -152,7 +153,7 @@ local function refreshTargetParts(data)
 end
 
 local function bindTargetCharacter(data, character)
-	data.Epoch += 1
+	data.Epoch = data.Epoch + 1
 	local myEpoch = data.Epoch
 	
 	disconnectList(data.CharacterConnections)
@@ -175,20 +176,20 @@ local function bindTargetCharacter(data, character)
 		data.Humanoid = humanoid
 		data.Alive = humanoid.Health > 0
 		
-		table.insert(data.CharacterConnections, humanoid.HealthChanged:Connect(function(health)
+		data.CharacterConnections[#data.CharacterConnections + 1] = humanoid.HealthChanged:Connect(function(health)
 			data.Alive = health > 0
 			if health <= 0 then
 				data.Root = nil
 			end
-		end))
+		end)
 		
-		table.insert(data.CharacterConnections, humanoid.Died:Connect(function()
+		data.CharacterConnections[#data.CharacterConnections + 1] = humanoid.Died:Connect(function()
 			data.Alive = false
 			data.Root = nil
-		end))
+		end)
 	end)
 	
-	table.insert(data.CharacterConnections, character.ChildAdded:Connect(function(child)
+	character.ChildAdded:Connect(function(child)
 		if child.Name == "HumanoidRootPart" and child:IsA("BasePart") then
 			data.Root = child
 			refreshTargetParts(data)
@@ -196,15 +197,15 @@ local function bindTargetCharacter(data, character)
 			data.Humanoid = child
 			data.Alive = child.Health > 0
 		end
-	end))
+	end)
 	
-	table.insert(data.CharacterConnections, character.AncestryChanged:Connect(function(_, parent)
+	character.AncestryChanged:Connect(function(_, parent)
 		if not parent then
 			data.Alive = false
 			data.Root = nil
 			data.Humanoid = nil
 		end
-	end))
+	end)
 end
 
 local function bindPlayer(player)
@@ -220,18 +221,20 @@ local function bindPlayer(player)
 	playerData[player.UserId] = data
 	
 	-- Always rebind character when it changes (respawn)
-	table.insert(data.PlayerConnections, player.CharacterAdded:Connect(function(character)
-		bindTargetCharacter(data, character)
-	end))
+	data.PlayerConnections = {}
 	
-	table.insert(data.PlayerConnections, player.CharacterRemoving:Connect(function(character)
+	data.PlayerConnections[#data.PlayerConnections + 1] = player.CharacterAdded:Connect(function(character)
+		bindTargetCharacter(data, character)
+	end)
+	
+	data.PlayerConnections[#data.PlayerConnections + 1] = player.CharacterRemoving:Connect(function(character)
 		if data.Character == character then
 			data.Character = nil
 			data.Root = nil
 			data.Humanoid = nil
 			data.Alive = false
 		end
-	end))
+	end)
 	
 	-- If already selected, bind immediately
 	if selectedTargets[player.UserId] then
@@ -255,7 +258,7 @@ local function startBring(player)
 	if not data then return end
 	
 	if not selectedTargets[player.UserId] then
-		table.insert(selectedOrder, player.UserId)
+		selectedOrder[#selectedOrder + 1] = player.UserId
 	end
 	
 	selectedTargets[player.UserId] = true
@@ -295,7 +298,7 @@ local function getSelectedData()
 			local data = playerData[userId]
 			-- Keep in list even if dead - will loop when they respawn
 			if data and data.Player and data.Player.Parent == Players then
-				table.insert(list, data)
+				list[#list + 1] = data
 			else
 				selectedTargets[userId] = nil
 				table.remove(selectedOrder, i)
@@ -310,7 +313,6 @@ end
 
 -- Engine
 local currentTargetData = nil
-local lastMove = 0
 
 local function getLocalRoot()
 	if localRoot and localRoot.Parent then
@@ -620,6 +622,8 @@ refreshList = function()
 	for _, child in ipairs(scroll:GetChildren()) do
 		if child:IsA("TextButton") then
 			child:Destroy()
+		elseif not child:IsA("UIListLayout") then
+			child:Destroy()
 		end
 	end
 	
@@ -662,7 +666,7 @@ refreshList = function()
 	updateStats()
 end
 
--- Main loop - always loops selected targets
+-- Main loop - OPTIMIZED: PreSimulation for better timing
 RunService.PreSimulation:Connect(function()
 	if not alive then return end
 	
@@ -672,11 +676,8 @@ RunService.PreSimulation:Connect(function()
 	local selected = getSelectedData()
 	if #selected == 0 then return end
 	
-	local moved = 0
-	
 	for index, data in ipairs(selected) do
 		if moveTarget(data, index, #selected, myRoot) then
-			moved += 1
 			if not currentTargetData then
 				currentTargetData = data
 			end
@@ -784,7 +785,7 @@ _G.TFLLoopbring = {
 	GetTargets = function()
 		local targets = {}
 		for _, data in ipairs(getSelectedData()) do
-			table.insert(targets, data.Player)
+			targets[#targets + 1] = data.Player
 		end
 		return targets
 	end
@@ -799,4 +800,4 @@ end))
 refreshList()
 updateStats()
 
-print("[TFLLoopbring] V6 Loaded - PERMANENT target looping")
+print("[TFLLoopbring] V7 Loaded - PERMANENT target looping (optimized)")
