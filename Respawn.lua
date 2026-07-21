@@ -1,5 +1,5 @@
 --=====================================================
--- ⚡ ULTRA RESPAWN V2
+-- ⚡ ULTRA RESPAWN V3
 -- Instant respawn with Guide() integration • No multi-firing • Network efficient
 --=====================================================
 
@@ -7,6 +7,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local GuideEvent = ReplicatedStorage:FindFirstChild("Guide")
 
@@ -21,9 +22,10 @@ local Humanoid = nil
 local deathConn = nil
 local charConn = nil
 
+-- Minimal debounce to prevent multi-firing (reduced from 0.3s)
 local respawnDebounce = false
 local lastRespawnTime = 0
-local RESPAWN_COOLDOWN = 0.3  -- Prevent multi-firing
+local RESPAWN_COOLDOWN = 0.1
 
 -----------------------------------------------------
 -- CLEAN CONNECTIONS
@@ -37,11 +39,11 @@ local function clearConnections()
 end
 
 -----------------------------------------------------
--- RESPAWN CORE (SAFE + DEBOUNCED + GUIDE INTEGRATION)
+-- RESPAWN CORE (INSTANT + GUIDE INTEGRATION)
 -----------------------------------------------------
 
 local function doRespawn()
-	-- Cooldown to prevent multi-firing
+	-- Minimal cooldown to prevent multi-firing
 	local now = os.clock()
 	if now - lastRespawnTime < RESPAWN_COOLDOWN then return end
 	if respawnDebounce then return end
@@ -49,24 +51,23 @@ local function doRespawn()
 	respawnDebounce = true
 	lastRespawnTime = now
 	
+	-- Call LoadCharacter to respawn the player
+	-- Then call Guide() to re-equip tools (if Use Tools is active)
+	pcall(function()
+		LocalPlayer:LoadCharacter()
+	end)
+	
+	-- After respawn, re-equip tools if Use Tools is active
 	task.spawn(function()
-		-- Try Guide() first if available (for Use Tools integration)
-		if _G.TFL_Guide then
-			pcall(function()
-				_G.TFL_Guide()
-			end)
-		elseif GuideEvent and GuideEvent:IsA("RemoteEvent") then
-			pcall(function()
-				GuideEvent:FireServer()
-			end)
-		else
-			pcall(function()
-				LocalPlayer:LoadCharacter()
-			end)
-		end
-		
-		-- Use Heartbeat wait for better ping handling
+		-- Wait for character to load
 		RunService.Heartbeat:Wait()
+		if _G.TFL_Guide then
+			pcall(_G.TFL_Guide)
+		end
+	end)
+	
+	-- Reset debounce after a short delay
+	task.delay(0.1, function()
 		respawnDebounce = false
 	end)
 end
@@ -77,14 +78,20 @@ end
 
 local function bindCharacter(char)
 	Character = char
-	Humanoid = char:WaitForChild("Humanoid", 5)
+	Humanoid = char:FindFirstChildOfClass("Humanoid")
 	
 	clearConnections()
+	
+	if not Humanoid then
+		-- Try to get Humanoid with a short wait
+		Humanoid = char:WaitForChild("Humanoid", 2)
+	end
 	
 	if not Humanoid then return end
 	
 	deathConn = Humanoid.Died:Connect(function()
 		if Enabled then
+			-- Instant respawn - no delay
 			doRespawn()
 		end
 	end)
@@ -126,7 +133,7 @@ end
 -----------------------------------------------------
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "UltraRespawnV2"
+gui.Name = "UltraRespawnV3"
 gui.ResetOnSpawn = false
 gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
@@ -186,7 +193,7 @@ end)
 -- KEYBIND
 -----------------------------------------------------
 
-game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
+UserInputService.InputBegan:Connect(function(input, gp)
 	if gp then return end
 	
 	if input.KeyCode == Enum.KeyCode.R then
@@ -215,4 +222,4 @@ end)
 
 refreshUI()
 
-print("⚡ Ultra Respawn V2 Loaded - Instant respawn with Guide() integration")
+print("⚡ Ultra Respawn V3 Loaded - Instant respawn with Guide() integration")
