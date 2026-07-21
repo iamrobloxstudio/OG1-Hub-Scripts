@@ -1,7 +1,4 @@
 -- TFL Use Tools
--- Advanced tool activation system with 3 modes and configurable settings
--- Black/Green hacker aesthetic theme with mobile/PC scaling
--- OPTIMIZED: Instant activation, single equip, minimal latency
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -722,11 +719,6 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
 	end
 end))
 
--- ============================================================================
--- GUIDE() - Call this function to run a re-equip loop
--- OPTIMIZED: Instant re-equip with minimal delay, no burst firing
--- ============================================================================
-
 -- Death backup: listen to Humanoid.Died on current character
 local function listenForDeath(char)
 	if not char then return end
@@ -752,8 +744,6 @@ local function listenForDeath(char)
 	table.insert(Connections, _G.__TFL_DeathConn)
 end
 
--- Guide() - Re-equip loop: equips tools, runs until tools are cached, then stops
--- OPTIMIZED: No burst firing, instant re-equip
 local function Guide()
 	if not Active then return end
 	
