@@ -138,8 +138,8 @@ local function removeToolWeld(tool)
 end
 
 -- Apply visual welds to keep all tools attached to hands
--- This is a CLIENT-SIDE fix only - tools work server-side but need visual attachment fix
--- Uses massless property to prevent physics interference with character movement
+-- OPTIMIZED: Natural grip positioning - tools appear as if being held normally
+-- Uses the tool's original Grip and GripPos for proper positioning
 local function applyToolWelds()
 	if not CurrentCharacter or not Active then return end
 	
@@ -165,7 +165,8 @@ local function applyToolWelds()
 		end
 	end
 	
-	-- Weld RightHand tools with staggered offsets to prevent overlap
+	-- Weld RightHand tools with natural grip positioning
+	-- Use the tool's original Grip and GripPos for proper positioning
 	for i, tool in ipairs(rightHandTools) do
 		local handle = tool:FindFirstChild("Handle")
 		if handle then
@@ -176,13 +177,14 @@ local function applyToolWelds()
 			weld.Part0 = handle
 			weld.Part1 = rightHand
 			
-			-- Calculate C0 from GripPos (inverse)
+			-- C0: Position relative to handle (inverse of GripPos)
 			weld.C0 = CFrame.new(-tool.GripPos.X, -tool.GripPos.Y, -tool.GripPos.Z)
 			
-			-- Calculate C1 from Grip with staggered offset
-			-- Each tool gets a different Z offset to prevent them from occupying the same space
-			local zOffset = 0.25 * (i - 1)
-			weld.C1 = tool.Grip * CFrame.new(0, 0, -zOffset)
+			-- C1: Position relative to hand
+			-- Use the tool's original Grip for natural positioning
+			-- Apply small angular offset to make multiple tools visible
+			local angleOffset = (i - 1) * 0.3
+			weld.C1 = tool.Grip * CFrame.fromAxisAngle(Vector3.new(0, 1, 0), angleOffset)
 			
 			weld.Parent = handle
 			ToolWelds[tool] = weld
