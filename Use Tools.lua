@@ -193,7 +193,7 @@ local function applyToolWelds()
 			end
 			handle.CanCollide = false
 			handle.Massless = true
-			handle.CanTouch = false
+			-- IMPORTANT: Keep CanTouch enabled for touch events to work!
 		end
 	end
 	
@@ -219,7 +219,7 @@ local function applyToolWelds()
 			end
 			handle.CanCollide = false
 			handle.Massless = true
-			handle.CanTouch = false
+			-- IMPORTANT: Keep CanTouch enabled for touch events to work!
 		end
 	end
 end
@@ -235,7 +235,6 @@ local function removeAllToolWelds()
 					handle.CanCollide = wasCanCollide
 				end
 				handle.Massless = false
-				handle.CanTouch = true
 			end
 			removeToolWeld(tool)
 		end
