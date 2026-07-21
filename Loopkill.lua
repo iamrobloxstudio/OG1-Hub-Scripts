@@ -142,7 +142,7 @@ local function createUI()
 	toggleBtn.TextColor3 = THEME.Text
 	toggleBtn.Font = Enum.Font.GothamBold
 	toggleBtn.TextSize = 13
-	toggleBtn.Text = "TARGET AURA"
+	toggleBtn.Text = "LOOPKILL"
 	toggleBtn.AutoButtonColor = false
 	toggleBtn.Parent = screenGui
 	Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(0, 12)
@@ -290,4 +290,4 @@ track(RunService.PreSimulation:Connect(function()
 	end
 end))
 
-print("[TFL Loopkill] Loaded - Target aura system ready (optimized)")
+print("[TFL Loopkill] Loaded - Loopkilling system ready (optimized)")
