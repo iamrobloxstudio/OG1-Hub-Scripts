@@ -789,9 +789,17 @@ track(LocalPlayer.CharacterAdded:Connect(function(char)
 	-- Re-attach death listener to new character
 	listenForDeath(char)
 	
+	-- Instantly re-equip tools on respawn if Use Tools is active
 	if Active then
 		-- Use task.defer for immediate but non-blocking execution
-		task.defer(Guide)
+		task.defer(function()
+			-- Small burst: equip tools and apply welds
+			equipAllTools()
+			cacheTools()
+			if #ToolsCache > 0 then
+				applyToolWelds()
+			end
+		end)
 	end
 end))
 
