@@ -14,7 +14,7 @@ local Lighting = game:GetService("Lighting")
 -- ======= User ID Verification System =======
 
 local AUTHORIZED_USER_IDS = {
-	[3816480506] = "Owner"
+	[3816480506] = "Owner",
 	[9407037318] = "Messi's main acc",
 	[10282034542] = "Messi's alt acc",
 	[1989950303] = "Lucky",
