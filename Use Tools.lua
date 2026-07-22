@@ -1,4 +1,7 @@
 -- TFL Use Tools
+-- Advanced tool activation system with 3 modes and configurable settings
+-- Black/Green hacker aesthetic theme with mobile/PC scaling
+-- OPTIMIZED: Instant activation, single equip, minimal latency
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -33,6 +36,7 @@ local CurrentCharacter = nil
 local CurrentRoot = nil
 local LastPulse = 0
 local CharacterConnections = {}
+local ReequipToken = 0
 
 -- Pre-allocated tables to reduce GC pressure
 local TargetPartsBuffer = {}
@@ -78,6 +82,13 @@ local function cleanup()
 		end
 	end
 	table.clear(Connections)
+	
+	for _, conn in ipairs(CharacterConnections) do
+		if conn and conn.Connected then
+			conn:Disconnect()
+		end
+	end
+	table.clear(CharacterConnections)
 	
 	-- Clean up Motor6D welds
 	for _, weld in pairs(ToolWelds) do
@@ -324,6 +335,56 @@ local function cacheTools()
 			end
 		end
 	end
+end
+
+local function hasBackpackTools()
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	if not backpack then return false end
+	for _, child in ipairs(backpack:GetChildren()) do
+		if child:IsA("Tool") then
+			return true
+		end
+	end
+	return false
+end
+
+local function equipCacheAndWeld()
+	if not Active then return false end
+	equipAllTools()
+	cacheTools()
+	if #ToolsCache > 0 then
+		applyToolWelds()
+		return true
+	end
+	return false
+end
+
+-- Respawn-safe equip: try immediately, then retry briefly while Backpack/Character finish loading.
+local function requestReequip()
+	if not Active then return end
+	ReequipToken = ReequipToken + 1
+	local token = ReequipToken
+	
+	task.spawn(function()
+		local char = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+		if token ~= ReequipToken or not Active then return end
+		
+		bindCharacter(char)
+		CurrentRoot = getHRP(char) or char:WaitForChild("HumanoidRootPart", 5)
+		
+		local deadline = os.clock() + 3
+		repeat
+			if token ~= ReequipToken or not Active then return end
+			
+			if equipCacheAndWeld() and not hasBackpackTools() then
+				return
+			end
+			
+			RunService.Heartbeat:Wait()
+		until os.clock() >= deadline
+		
+		equipCacheAndWeld()
+	end)
 end
 
 -- Get closest target for touch assist (exclude self) - OPTIMIZED: pre-allocated buffer
@@ -636,10 +697,11 @@ local function setState(state)
 	updateUI()
 	
 	if Active then
-		equipAllTools()
-		cacheTools()
-		applyToolWelds()
+		requestReequip()
 	else
+		ReequipToken = ReequipToken + 1
+		removeAllToolWelds()
+		
 		-- Unequip ALL tools when deactivating
 		local char = CurrentCharacter
 		if char then
@@ -653,7 +715,6 @@ local function setState(state)
 			end
 		end
 		table.clear(ToolsCache)
-		removeAllToolWelds()
 	end
 end
 
@@ -719,6 +780,11 @@ track(UserInputService.InputBegan:Connect(function(input, gpe)
 	end
 end))
 
+-- ============================================================================
+-- GUIDE() - Call this function to run a re-equip loop
+-- OPTIMIZED: Instant re-equip with minimal delay, no burst firing
+-- ============================================================================
+
 -- Death backup: listen to Humanoid.Died on current character
 local function listenForDeath(char)
 	if not char then return end
@@ -732,46 +798,17 @@ local function listenForDeath(char)
 	
 	_G.__TFL_DeathConn = hum.Died:Connect(function()
 		if not Active then return end
-		-- Run Guide() after death - minimal delay for respawn
-		task.spawn(function()
-			-- Use Heartbeat wait instead of fixed delay for better ping handling
-			RunService.Heartbeat:Wait()
-			Guide()
-		end)
+		requestReequip()
 	end)
 	
 	-- Also track in Connections for cleanup
 	table.insert(Connections, _G.__TFL_DeathConn)
 end
 
+-- Guide() - Re-equip loop: equips tools, runs until tools are cached, then stops
+-- OPTIMIZED: No burst firing, instant re-equip
 local function Guide()
-	if not Active then return end
-	
-	local char = LocalPlayer.Character
-	if not char then
-		-- Wait for character if it doesn't exist yet
-		char = LocalPlayer.CharacterAdded:Wait()
-	end
-	
-	-- Wait for character parts - use Heartbeat for better responsiveness
-	local hrp = char:FindFirstChild("HumanoidRootPart")
-	if not hrp then
-		hrp = char:WaitForChild("HumanoidRootPart", 5)
-	end
-	
-	if hrp then
-		bindCharacter(char)
-		CurrentRoot = hrp
-		
-		-- Re-equip tools
-		equipAllTools()
-		cacheTools()
-		
-		-- Apply welds if we have tools
-		if #ToolsCache > 0 then
-			applyToolWelds()
-		end
-	end
+	requestReequip()
 end
 
 -- Respawn handler - uses Guide() for re-equip on character add
@@ -781,15 +818,30 @@ track(LocalPlayer.CharacterAdded:Connect(function(char)
 	
 	-- Instantly re-equip tools on respawn if Use Tools is active
 	if Active then
-		-- Use task.defer for immediate but non-blocking execution
-		task.defer(function()
-			-- Small burst: equip tools and apply welds
-			equipAllTools()
-			cacheTools()
-			if #ToolsCache > 0 then
-				applyToolWelds()
-			end
-		end)
+		requestReequip()
+	end
+end))
+
+if LocalPlayer.Character then
+	listenForDeath(LocalPlayer.Character)
+end
+
+local function bindBackpack(backpack)
+	if not backpack then return end
+	track(backpack.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") and Active then
+			requestReequip()
+		end
+	end))
+end
+
+bindBackpack(LocalPlayer:FindFirstChildOfClass("Backpack"))
+track(LocalPlayer.ChildAdded:Connect(function(child)
+	if child:IsA("Backpack") then
+		bindBackpack(child)
+		if Active then
+			requestReequip()
+		end
 	end
 end))
 
@@ -834,7 +886,7 @@ track(RunService.PreSimulation:Connect(function()
 end))
 
 -- Character tool tracking for weld management
-LocalPlayer.CharacterAdded:Connect(function(char)
+track(LocalPlayer.CharacterAdded:Connect(function(char)
 	track(char.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") and Active then
 			cacheTools()
@@ -847,7 +899,7 @@ LocalPlayer.CharacterAdded:Connect(function(char)
 			removeToolWeld(child)
 		end
 	end))
-end)
+end))
 
 -- Initial update
 updateUI()
