@@ -1,7 +1,4 @@
 -- TFL Use Tools
--- Advanced tool activation system with 3 modes and configurable settings
--- Black/Green hacker aesthetic theme with mobile/PC scaling
--- OPTIMIZED: Instant activation, single equip, minimal latency
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
