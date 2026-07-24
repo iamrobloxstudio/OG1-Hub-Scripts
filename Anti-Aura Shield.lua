@@ -132,6 +132,7 @@ end))
 table.insert(Connections, UserInputService.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 	if input.KeyCode == Enum.KeyCode.J then
+		print("Active")
 		Active = not Active
 	end
 end))
