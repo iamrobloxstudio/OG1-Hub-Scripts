@@ -11,18 +11,6 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Lighting = game:GetService("Lighting")
 
--- ======= User ID Verification System =======
-
-local AUTHORIZED_USER_IDS = {
-	[9407037318] = "Messi's main acc",
-	[10282034542] = "Messi's alt acc",
-	[1989950303] = "Lucky",
-	[3687384835] = "Scar",
-	[10520590654] = "Star",
-	[4431183945] = "Jack",
-	[3660679191] = "Sarah",
-}
-
 local function notify(title, text, duration)
 	pcall(function()
 		game:GetService("StarterGui"):SetCore("SendNotification", {
@@ -31,30 +19,6 @@ local function notify(title, text, duration)
 			Duration = duration or 5
 		})
 	end)
-end
-
-local function isUserAuthorized()
-	local userId = LocalPlayer.UserId
-	
-	if AUTHORIZED_USER_IDS[userId] then
-		return true, AUTHORIZED_USER_IDS[userId]
-	end
-	
-	return false, nil
-end
-
--- Perform verification
-local authorized, authName = isUserAuthorized()
-
-if not authorized then
-	notify(
-		"TFL Hub",
-		"Verification Failed\nUnauthorized User",5)
-	return
-else
-	notify(
-		"Verification Passed",
-		"Name - " .. tostring(authName) .. "\nEnjoy the hub",6)
 end
 
 local DEFAULT_THEME = {
