@@ -8,7 +8,7 @@ local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
 -- Configuration
-local AURA_RANGE = 30
+local AURA_RANGE = 100
 local TOUCH_BURST = 3
 local AURA_RATE = 1/30
 
