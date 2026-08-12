@@ -81,6 +81,14 @@ local function getTouchPart(tool)
 	return nil
 end
 
+-- Add player to auto-selection
+local function selectPlayer(userId)
+	if not SelectedTargets[userId] then
+		SelectedTargets[userId] = true
+		table.insert(TargetOrder, userId)
+	end
+end
+
 -- Attack function
 local function Attack(tool, targetChar)
 	if not tool or not tool:IsDescendantOf(workspace) then return end
@@ -263,6 +271,21 @@ if ToggleButton then
 	end)
 end
 
+-- Auto-select all players on execute
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr ~= LocalPlayer then
+		selectPlayer(plr.UserId)
+	end
+end
+
+-- Auto-select new/returning players on join
+track(Players.PlayerAdded:Connect(function(plr)
+	selectPlayer(plr.UserId)
+	if Active then
+		updatePlayerList()
+	end
+end))
+
 -- Main loop - OPTIMIZED: PreSimulation for better timing
 local LastFire = 0
 
@@ -280,12 +303,11 @@ track(RunService.PreSimulation:Connect(function()
 	local targets = getTargets()
 	if #targets == 0 then return end
 	
-	-- Attack with all tools
-	for _, tool in ipairs(char:GetChildren()) do
-		if tool:IsA("Tool") then
-			for _, targetChar in ipairs(targets) do
-				Attack(tool, targetChar)
-			end
+	-- Attack with equipped tool (spam tool.Activate)
+	local equippedTool = char:FindFirstChildOfClass("Tool")
+	if equippedTool then
+		for _, targetChar in ipairs(targets) do
+			Attack(equippedTool, targetChar)
 		end
 	end
 end))
