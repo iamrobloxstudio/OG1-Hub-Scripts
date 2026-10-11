@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // TARGET AURA V4.0 (STANDALONE SSS EDITION)
--- Selective Player Multi-Target Locking & Burst Touch Aura Engine
--- High MS Ping Double-Tap Replication | Draggable Cyber SSS UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -29,8 +22,8 @@ local THEME = {
 }
 
 local TOGGLE_KEY = Enum.KeyCode.T
-local FIRE_RATE  = 1 / 40 -- 40Hz attack rate
-local TOUCH_BURST = 3
+local TOUCH_BURST = 6
+local REMOTE_BURST = 3
 
 -- Executor API Resolver
 local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest 
@@ -41,18 +34,21 @@ if not fireTouch then
 	warn("[Target Aura] firetouchinterest executor closure not found. Touch damage disabled.")
 end
 
--- Localized Standalone State (Zero _G / Zero getgenv coupling)
+-- Localized Standalone State
 local TargetList: { [Player]: boolean } = {}
 local Active: boolean = true
-local lastFire: number = 0
 
--- Priority Parts for Target Hitbox Touch
+-- Priority Parts for Full Body Coverage
 local PRIORITY_PARTS = {
 	"HumanoidRootPart",
 	"Head",
 	"UpperTorso",
 	"LowerTorso",
 	"Torso",
+	"Right Arm",
+	"Left Arm",
+	"Right Leg",
+	"Left Leg",
 }
 
 -- ================================================================
@@ -342,7 +338,7 @@ end)
 updatePlayerList()
 
 -- ================================================================
--- 5. ATTACK ENGINE & RUNNER (HIGH PING DOUBLE-TAP REPLICATION)
+-- 5. ATTACK ENGINE (DUAL-DISPATCH: TOUCH BURST + REMOTE FIRE)
 -- ================================================================
 local function getTouchInterest(tool: Tool): BasePart?
 	for _, obj in ipairs(tool:GetDescendants()) do
@@ -357,13 +353,23 @@ local function getTouchInterest(tool: Tool): BasePart?
 	return nil
 end
 
-RunService.Stepped:Connect(function()
+local function findFightRemote(tool: Tool): RemoteEvent?
+	local r = tool:FindFirstChild("FightEvent")
+	if r and r:IsA("RemoteEvent") then return r end
+	for _, o in ipairs(tool:GetDescendants()) do
+		if o:IsA("RemoteEvent") then
+			local n = string.lower(o.Name)
+			if string.find(n, "fight", 1, true) or string.find(n, "slap", 1, true) or string.find(n, "event", 1, true) then
+				return o
+			end
+		end
+	end
+	return nil
+end
+
+local function executeTargetAttack()
 	if not Active then return end
 	if not next(TargetList) then return end
-
-	local now = os.clock()
-	if now - lastFire < FIRE_RATE then return end
-	lastFire = now
 
 	local char = LocalPlayer.Character
 	if not char then return end
@@ -384,26 +390,43 @@ RunService.Stepped:Connect(function()
 	for _, tool in ipairs(char:GetChildren()) do
 		if tool:IsA("Tool") then
 			local touch = getTouchInterest(tool)
+			local remote = findFightRemote(tool)
+
 			if touch and touch.Parent then
-				-- Anti-snag configuration for 1v1 escape synergy
 				touch.CanCollide = false
 				touch.Massless = true
 				touch.CanTouch = true
 
 				for _, targetChar in ipairs(targetsToHit) do
-					for p = 1, #PRIORITY_PARTS do
-						local part = targetChar:FindFirstChild(PRIORITY_PARTS[p])
-						if part and part:IsA("BasePart") and fireTouch then
-							for _ = 1, TOUCH_BURST do
-								pcall(fireTouch, touch, part, 0)
-								pcall(fireTouch, touch, part, 1)
+					local targetHRP = targetChar:FindFirstChild("HumanoidRootPart") or targetChar:FindFirstChild("Torso")
+
+					-- 1. Full Body Multi-Touch Burst
+					if fireTouch then
+						for p = 1, #PRIORITY_PARTS do
+							local part = targetChar:FindFirstChild(PRIORITY_PARTS[p])
+							if part and part:IsA("BasePart") and part.Parent then
+								for _ = 1, TOUCH_BURST do
+									pcall(fireTouch, touch, part, 0)
+									pcall(fireTouch, touch, part, 1)
+								end
 							end
+						end
+					end
+
+					-- 2. Direct Combat Remote Dispatch
+					if remote and targetHRP then
+						for _ = 1, REMOTE_BURST do
+							pcall(remote.FireServer, remote, targetHRP)
 						end
 					end
 				end
 			end
 		end
 	end
-end)
+end
 
-print("[Target Aura] CIPHER // TARGET AURA V4.0 Loaded successfully.")
+-- Dual-phase frame execution on Stepped AND Heartbeat for instantaneous damage delivery
+RunService.Stepped:Connect(executeTargetAttack)
+RunService.Heartbeat:Connect(executeTargetAttack)
+
+print("[Target Aura] CIPHER // TARGET AURA V5.0 Loaded (Dual-Dispatch SSS Edition).")
