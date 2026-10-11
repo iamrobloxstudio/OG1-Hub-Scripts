@@ -1,240 +1,293 @@
--- CONFIG
-_G.FollowOffset = Vector3.new(0, 0.6, 0) -- ðŸ‘ˆ BAJADO para seguir el torso
-_G.AvoidCollisionOffset = Vector3.new(0, 0, 0.5)
-
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local Terrain = Workspace.Terrain
 
-local bringTargets = {}
-local following = false
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
----------------------------------------------------------
--- NUEVOS CACHES (ANTI-LAG)
----------------------------------------------------------
-local cachedToolParts = {}
-local cachedTorso = {}
+-- ================================================================
+-- 1. SSS RED CYBER HACKER THEME & CONFIG
+-- ================================================================
+local THEME = {
+	VoidBg      = Color3.fromRGB(10, 10, 14),
+	CardBg      = Color3.fromRGB(16, 16, 22),
+	AccentRed   = Color3.fromRGB(255, 35, 60),
+	AccentHover = Color3.fromRGB(255, 70, 95),
+	AccentDim   = Color3.fromRGB(80, 20, 30),
+	ActiveGreen = Color3.fromRGB(45, 225, 115),
+	BorderRed   = Color3.fromRGB(255, 45, 70),
+	TextPrimary = Color3.fromRGB(245, 245, 255),
+	TextMuted   = Color3.fromRGB(140, 145, 165),
+}
 
----------------------------------------------------------
--- FUNCION CLAVE (ORIGINAL - NO TOCADA)
----------------------------------------------------------
-local function getToolPart(tool)
-	if tool:FindFirstChild("Handle") and tool.Handle:IsA("BasePart") then
-		return tool.Handle
+local TOGGLE_KEY = Enum.KeyCode.P
+local BoostActive = true
+
+-- ================================================================
+-- 2. GUI RESOLVER
+-- ================================================================
+local function getGuiContainer(): Instance
+	local success, core = pcall(function() return CoreGui end)
+	if success and core then
+		local canWrite = pcall(function()
+			local test = Instance.new("Folder")
+			test.Parent = core
+			test:Destroy()
+		end)
+		if canWrite then return core end
 	end
-
-	if tool.PrimaryPart and tool.PrimaryPart:IsA("BasePart") then
-		return tool.PrimaryPart
-	end
-
-	for _, v in ipairs(tool:GetDescendants()) do
-		if v:IsA("BasePart") then
-			return v
-		end
-	end
-
-	return nil
+	return LocalPlayer:WaitForChild("PlayerGui")
 end
 
----------------------------------------------------------
--- NUEVA FUNCION: CACHEAR TOOLS (NO REEMPLAZA)
----------------------------------------------------------
-local function updateToolCache()
-	table.clear(cachedToolParts)
-	if not LocalPlayer.Character then return end
+local guiContainer = getGuiContainer()
+local existing = guiContainer:FindFirstChild("CipherAntiLagUI")
+if existing then existing:Destroy() end
 
-	for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
-		if tool:IsA("Tool") then
-			local part = getToolPart(tool)
-			if part then
-				cachedToolParts[#cachedToolParts + 1] = part
-			end
-		end
-	end
-end
+-- ================================================================
+-- 3. SSS RED CYBER HACKER DRAGGABLE GUI
+-- ================================================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CipherAntiLagUI"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+ScreenGui.Parent = guiContainer
 
----------------------------------------------------------
--- NUEVA FUNCION: CACHEAR TORSO OBJETIVO (FORZADO A TORSO)
----------------------------------------------------------
-local function getCachedTorso(char)
-	if cachedTorso[char] and cachedTorso[char].Parent then
-		return cachedTorso[char]
-	end
+local MainCard = Instance.new("Frame")
+MainCard.Name = "MainCard"
+MainCard.Size = UDim2.fromOffset(240, 68)
+MainCard.Position = UDim2.new(0.04, 0, 0.62, 0)
+MainCard.BackgroundColor3 = THEME.VoidBg
+MainCard.BackgroundTransparency = 0.08
+MainCard.BorderSizePixel = 0
+MainCard.Active = true
+MainCard.Parent = ScreenGui
 
-	local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
-	cachedTorso[char] = torso
-	return torso
-end
+local CardCorner = Instance.new("UICorner")
+CardCorner.CornerRadius = UDim.new(0, 10)
+CardCorner.Parent = MainCard
 
----------------------------------------------------------
--- GUI (ORIGINAL)
----------------------------------------------------------
-local gui = Instance.new("ScreenGui")
-gui.Name = "ToolFollowGUI"
-gui.ResetOnSpawn = false
-gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+local CardStroke = Instance.new("UIStroke")
+CardStroke.Thickness = 1.5
+CardStroke.Color = THEME.BorderRed
+CardStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+CardStroke.Parent = MainCard
 
-local toggleBtn = Instance.new("TextButton")
-toggleBtn.Parent = gui
-toggleBtn.Size = UDim2.new(0, 40, 0, 40)
-toggleBtn.Position = UDim2.new(1, -50, 0, 100)
-toggleBtn.Text = "â‡©"
-toggleBtn.TextScaled = true
-toggleBtn.Font = Enum.Font.GothamBold
-toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
-toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+-- Header (Drag Handle)
+local Header = Instance.new("Frame")
+Header.Name = "Header"
+Header.Size = UDim2.new(1, 0, 0, 24)
+Header.BackgroundColor3 = THEME.CardBg
+Header.BorderSizePixel = 0
+Header.Parent = MainCard
 
-local frame = Instance.new("Frame")
-frame.Parent = gui
-frame.Position = UDim2.new(1, -250, 0, 145)
-frame.Size = UDim2.new(0, 220, 0, 260)
-frame.BackgroundColor3 = Color3.fromRGB(25, 5, 5)
-frame.Visible = false
-Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
-Instance.new("UIStroke", frame).Color = Color3.fromRGB(200, 0, 0)
+local HeaderCorner = Instance.new("UICorner")
+HeaderCorner.CornerRadius = UDim.new(0, 10)
+HeaderCorner.Parent = Header
 
-local scroll = Instance.new("ScrollingFrame", frame)
-scroll.Position = UDim2.new(0, 0, 0, 10)
-scroll.Size = UDim2.new(1, 0, 1, -10)
-scroll.BackgroundTransparency = 1
-scroll.ScrollBarThickness = 5
+local HeaderTitle = Instance.new("TextLabel")
+HeaderTitle.Size = UDim2.new(1, -20, 1, 0)
+HeaderTitle.Position = UDim2.new(0, 10, 0, 0)
+HeaderTitle.BackgroundTransparency = 1
+HeaderTitle.Font = Enum.Font.GothamBold
+HeaderTitle.TextSize = 10
+HeaderTitle.TextColor3 = THEME.AccentRed
+HeaderTitle.TextXAlignment = Enum.TextXAlignment.Left
+HeaderTitle.Text = "⚡ CIPHER // ANTI-LAG [P]"
+HeaderTitle.Parent = Header
 
-local layout = Instance.new("UIListLayout", scroll)
-layout.Padding = UDim.new(0, 3)
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.fromOffset(8, 8)
+StatusDot.Position = UDim2.new(1, -16, 0.5, -4)
+StatusDot.BackgroundColor3 = THEME.ActiveGreen
+StatusDot.BorderSizePixel = 0
+StatusDot.Parent = Header
 
----------------------------------------------------------
--- TOOL FOLLOW SYSTEM (ORIGINAL + CACHE)
----------------------------------------------------------
-local function moveToolsToTarget(targetChar)
-	local torso = getCachedTorso(targetChar)
-	if not torso then return end
+local DotCorner = Instance.new("UICorner")
+DotCorner.CornerRadius = UDim.new(1, 0)
+DotCorner.Parent = StatusDot
 
-	for _, part in ipairs(cachedToolParts) do
-		if part and part.Parent then
-			part.Position =
-				torso.Position
-				+ _G.FollowOffset
-				+ _G.AvoidCollisionOffset
+-- Interactive Toggle Button
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "ToggleButton"
+ToggleButton.Size = UDim2.new(1, -16, 0, 32)
+ToggleButton.Position = UDim2.new(0, 8, 0, 28)
+ToggleButton.BackgroundColor3 = THEME.CardBg
+ToggleButton.Font = Enum.Font.GothamBold
+ToggleButton.TextSize = 12
+ToggleButton.TextColor3 = THEME.ActiveGreen
+ToggleButton.Text = "⚡ FPS BOOST: ACTIVE // ULTRA"
+ToggleButton.AutoButtonColor = false
+ToggleButton.Parent = MainCard
 
-			firetouchinterest(part, torso, 0)
-			firetouchinterest(part, torso, 1)
-		end
-	end
-end
+local BtnCorner = Instance.new("UICorner")
+BtnCorner.CornerRadius = UDim.new(0, 6)
+BtnCorner.Parent = ToggleButton
 
----------------------------------------------------------
--- LOOP PRINCIPAL (MISMO FUNCIONAMIENTO)
----------------------------------------------------------
-local function startFollowing()
-	if following then return end
-	following = true
+local BtnStroke = Instance.new("UIStroke")
+BtnStroke.Thickness = 1
+BtnStroke.Color = THEME.BorderRed
+BtnStroke.Transparency = 0.4
+BtnStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+BtnStroke.Parent = ToggleButton
 
-	RunService.Heartbeat:Connect(function()
-		if #bringTargets == 0 then return end
-		if not LocalPlayer.Character then return end
+-- Draggable implementation
+local function setupDraggable(frame: Frame, dragHandle: Frame)
+	local dragging = false
+	local dragInput: InputObject? = nil
+	local dragStart: Vector3 = Vector3.zero
+	local startPos: UDim2 = UDim2.new()
 
-		for _, name in ipairs(bringTargets) do
-			local plr = Players:FindFirstChild(name)
-			if plr and plr.Character then
-				moveToolsToTarget(plr.Character)
-			end
-		end
-	end)
-end
-
----------------------------------------------------------
--- FIX FISICA (ORIGINAL)
----------------------------------------------------------
-local function fixToolPhysics()
-	if not LocalPlayer.Character then return end
-
-	for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
-		if tool:IsA("Tool") then
-			local part = getToolPart(tool)
-			if part then
-				part.CanCollide = false
-				part.Massless = true
-			end
-		end
-	end
-end
-
----------------------------------------------------------
--- RESPAWN + CACHE
----------------------------------------------------------
-LocalPlayer.CharacterAdded:Connect(function(char)
-	char:WaitForChild("HumanoidRootPart")
-	updateToolCache()
-
-	char.ChildAdded:Connect(function(child)
-		if child:IsA("Tool") then
-			task.wait()
-			updateToolCache()
-			local part = getToolPart(child)
-			if part then
-				part.CanCollide = false
-				part.Massless = true
-			end
-		end
-	end)
-
-	fixToolPhysics()
-end)
-
-updateToolCache()
-fixToolPhysics()
-
----------------------------------------------------------
--- LISTA DE JUGADORES (ORIGINAL)
----------------------------------------------------------
-local function refreshList()
-	for _, child in ipairs(scroll:GetChildren()) do
-		if child:IsA("TextButton") then
-			child:Destroy()
-		end
-	end
-
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LocalPlayer then
-			local btn = Instance.new("TextButton")
-			btn.Parent = scroll
-			btn.Size = UDim2.new(1, -8, 0, 28)
-			btn.Text = p.Name
-			btn.Font = Enum.Font.Gotham
-			btn.TextScaled = true
-			btn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
-			btn.TextColor3 =
-				table.find(bringTargets, p.Name)
-				and Color3.fromRGB(255, 255, 255)
-				or Color3.fromRGB(0, 255, 0)
-
-			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
-			btn.MouseButton1Click:Connect(function()
-				if table.find(bringTargets, p.Name) then
-					table.remove(bringTargets, table.find(bringTargets, p.Name))
-				else
-					table.insert(bringTargets, p.Name)
-					startFollowing()
+	dragHandle.InputBegan:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			dragging = true
+			dragStart = input.Position
+			startPos = frame.Position
+			input.Changed:Connect(function()
+				if input.UserInputState == Enum.UserInputState.End then
+					dragging = false
 				end
-				refreshList()
 			end)
 		end
-	end
+	end)
 
-	scroll.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 32)
+	dragHandle.InputChanged:Connect(function(input: InputObject)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			dragInput = input
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input: InputObject)
+		if input == dragInput and dragging then
+			local delta = input.Position - dragStart
+			frame.Position = UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+		end
+	end)
 end
 
-Players.PlayerAdded:Connect(refreshList)
-Players.PlayerRemoving:Connect(refreshList)
+setupDraggable(MainCard, Header)
 
----------------------------------------------------------
--- TOGGLE GUI
----------------------------------------------------------
-toggleBtn.MouseButton1Click:Connect(function()
-	frame.Visible = not frame.Visible
+-- Hover
+ToggleButton.MouseEnter:Connect(function()
+	TweenService:Create(ToggleButton, TweenInfo.new(0.12), {BackgroundColor3 = THEME.AccentDim}):Play()
+end)
+ToggleButton.MouseLeave:Connect(function()
+	TweenService:Create(ToggleButton, TweenInfo.new(0.12), {BackgroundColor3 = THEME.CardBg}):Play()
 end)
 
-refreshList()
-startFollowing()
+local function updateUI()
+	if BoostActive then
+		ToggleButton.Text = "⚡ FPS BOOST: ACTIVE // ULTRA"
+		ToggleButton.TextColor3 = THEME.ActiveGreen
+		StatusDot.BackgroundColor3 = THEME.ActiveGreen
+		CardStroke.Color = THEME.BorderRed
+	else
+		ToggleButton.Text = "⚡ FPS BOOST: STANDBY [P]"
+		ToggleButton.TextColor3 = THEME.TextMuted
+		StatusDot.BackgroundColor3 = THEME.AccentDim
+		CardStroke.Color = Color3.fromRGB(50, 50, 60)
+	end
+end
+updateUI()
+
+-- ================================================================
+-- 4. RENDERING & MEMORY OPTIMIZATION PIPELINE
+-- ================================================================
+local function applyOptimizations()
+	pcall(function()
+		Lighting.GlobalShadows = false
+		Lighting.FogEnd = 9e9
+		Lighting.FogStart = 9e9
+		Lighting.Brightness = 1
+		Lighting.EnvironmentDiffuseScale = 0
+		Lighting.EnvironmentSpecularScale = 0
+		Lighting.ExposureCompensation = 0
+
+		for _, v in ipairs(Lighting:GetChildren()) do
+			if v:IsA("PostEffect") then
+				v.Enabled = false
+			end
+		end
+	end)
+
+	pcall(function()
+		if Terrain then
+			Terrain.WaterWaveSize = 0
+			Terrain.WaterWaveSpeed = 0
+			Terrain.WaterReflectance = 0
+			Terrain.WaterTransparency = 1
+		end
+	end)
+
+	pcall(function()
+		if typeof(settings) == "function" then
+			settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+		end
+	end)
+end
+
+local function simplifyPart(obj: Instance)
+	if not BoostActive then return end
+	if obj:IsA("BasePart") then
+		obj.Material = Enum.Material.Plastic
+		obj.Reflectance = 0
+		obj.CastShadow = false
+	elseif obj:IsA("Decal") or obj:IsA("Texture") then
+		obj.Transparency = 1
+	elseif obj:IsA("ParticleEmitter")
+		or obj:IsA("Trail")
+		or obj:IsA("Smoke")
+		or obj:IsA("Fire")
+		or obj:IsA("Sparkles") then
+		obj.Enabled = false
+	elseif obj:IsA("Explosion") or obj:IsA("Beam") or obj:IsA("Highlight") then
+		pcall(obj.Destroy, obj)
+	end
+end
+
+-- Scan workspace
+for _, v in ipairs(Workspace:GetDescendants()) do
+	simplifyPart(v)
+end
+
+Workspace.DescendantAdded:Connect(simplifyPart)
+applyOptimizations()
+
+local function toggleBoost()
+	BoostActive = not BoostActive
+	if BoostActive then
+		applyOptimizations()
+		for _, v in ipairs(Workspace:GetDescendants()) do
+			simplifyPart(v)
+		end
+	end
+	updateUI()
+end
+
+ToggleButton.MouseButton1Click:Connect(toggleBoost)
+
+UserInputService.InputBegan:Connect(function(input: InputObject, gpe: boolean)
+	if gpe then return end
+	if input.KeyCode == TOGGLE_KEY then
+		toggleBoost()
+	end
+end)
+
+-- Periodical GC
+task.spawn(function()
+	while true do
+		task.wait(30)
+		pcall(function()
+			collectgarbage("collect")
+		end)
+	end
+end)
+
+print("[Anti-Lag] CIPHER // ULTRA ANTI-LAG & FPS BOOSTER V4.0 Loaded successfully.")
