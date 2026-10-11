@@ -1,8 +1,9 @@
 --!strict
 -- ================================================================
--- ⚡ CIPHER // USE TOOLS V4.1 (STANDALONE SSS EDITION)
--- Hyper-Performance Tool Activation & Re-Equip Guide Engine
--- Anti-Snag 1v1 Escape Physics | Draggable UI
+-- ⚡ CIPHER // USE TOOLS V4.2 (STANDALONE SSS EDITION)
+-- Simultaneous Multi-Tool Equipper & Steady High-Rate Activation Engine
+-- Multi-Weapon Concurrency (MAX_TOOLS) | Zero Ping-Spike Cadence Pacer
+-- Anti-Snag 1v1 Escape Physics | Draggable SSS Red Cyber Hacker UI
 -- ================================================================
 
 local Players = game:GetService("Players")
@@ -33,13 +34,13 @@ local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest
 	or (getgenv and (getgenv().firetouchinterest or getgenv().fire_touch_interest))
 	or (syn and syn.firetouchinterest)
 
--- Configuration (10 - 1000 APS, 1 - 10 Tools)
-local APS: number                = 80
+-- Configuration (10 - 150 APS, 1 - 10 Tools)
+local APS: number                = 60
 local MAX_TOOLS: number          = 5
 local TOUCH_ASSIST_RANGE: number = 16
 local TOUCH_ASSIST_SQ: number    = TOUCH_ASSIST_RANGE * TOUCH_ASSIST_RANGE
 
--- Modes: "Normal" (Activate only), "Event" (FightEvent only), "Max" (Both with fixed 10 APS)
+-- Modes: "Normal" (Activate only), "Event" (FightEvent only), "Max" (Both with steady 25 APS)
 local Mode: string               = "Normal"
 local Active: boolean            = false
 
@@ -123,57 +124,57 @@ local function cacheTools()
 end
 
 -- ================================================================
--- 5. RE-EQUIP & LATENCY-RESILIENT GUIDE
+-- 5. SIMULTANEOUS MULTI-TOOL CONCURRENCY ENGINE
 -- ================================================================
-local function requestReequip()
+-- Enforces that exactly MAX_TOOLS are equipped at the exact same time
+local function syncEquippedTools()
 	if not Active then return end
-	ReequipToken += 1
-	local myToken = ReequipToken
+	local char = CurrentCharacter
+	if not char then return end
 
-	task.spawn(function()
-		local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-		local char = CurrentCharacter
-		if not backpack or not char then return end
+	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+	if not backpack then return end
 
-		local hum = char:FindFirstChildOfClass("Humanoid")
-		if not hum or hum.Health <= 0 then return end
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not hum or hum.Health <= 0 then return end
 
-		local equippedCount = 0
-		for _, child in ipairs(char:GetChildren()) do
-			if child:IsA("Tool") then
-				sanitizeToolPhysics(child)
-				equippedCount += 1
+	-- 1. Scan currently equipped tools in character
+	local equippedTools: { Tool } = {}
+	for _, child in ipairs(char:GetChildren()) do
+		if child:IsA("Tool") then
+			table.insert(equippedTools, child)
+		end
+	end
+
+	local count = #equippedTools
+
+	-- 2. If more tools than MAX_TOOLS, unequip excess to backpack
+	if count > MAX_TOOLS then
+		for i = MAX_TOOLS + 1, count do
+			local tool = equippedTools[i]
+			if tool and tool.Parent == char then
+				tool.Parent = backpack
 			end
 		end
-
-		if equippedCount >= MAX_TOOLS then
-			cacheTools()
-			return
-		end
-
-		local toolsToEquip: { Tool } = {}
+	-- 3. If fewer tools than MAX_TOOLS, equip tools from backpack concurrently
+	elseif count < MAX_TOOLS then
+		local needed = MAX_TOOLS - count
 		for _, tool in ipairs(backpack:GetChildren()) do
 			if tool:IsA("Tool") then
-				table.insert(toolsToEquip, tool)
-				if equippedCount + #toolsToEquip >= MAX_TOOLS then break end
+				sanitizeToolPhysics(tool)
+				-- Parenting directly to character allows multiple tools equipped simultaneously
+				tool.Parent = char
+				needed -= 1
+				if needed <= 0 then break end
 			end
 		end
+	end
 
-		for _, tool in ipairs(toolsToEquip) do
-			if ReequipToken ~= myToken or not Active then break end
-			pcall(hum.EquipTool, hum, tool)
-		end
-
-		task.defer(function()
-			if ReequipToken == myToken and Active then
-				cacheTools()
-			end
-		end)
-	end)
+	cacheTools()
 end
 
 -- ================================================================
--- 6. DAMAGE PULSE (FIGHTEVENT + ACTIVATION + TOUCH ASSIST)
+-- 6. DAMAGE PULSE (STEADY HIGH-RATE ACTIVATION // NO PING SPIKES)
 -- ================================================================
 local function getToolTouchPart(tool: Tool): BasePart?
 	local handle = tool:FindFirstChild("Handle")
@@ -216,15 +217,16 @@ local function damagePulse()
 		end
 	end
 
-	-- Dispatch tool actions
-	for _, tool in ipairs(ToolsCache) do
-		if tool and tool.Parent then
-			-- Activation
+	-- Dispatch tool actions to ALL simultaneously equipped tools
+	for i = 1, #ToolsCache do
+		local tool = ToolsCache[i]
+		if tool and tool.Parent == char then
+			-- 1. Fast steady activation spam
 			if Mode == "Normal" or Mode == "Max" then
 				pcall(tool.Activate, tool)
 			end
 
-			-- Remote Event Trigger
+			-- 2. FightEvent Remote Trigger (Single steady fire per tool per pulse)
 			if Mode == "Event" or Mode == "Max" then
 				local remote = tool:FindFirstChild("FightEvent")
 				if not remote then
@@ -243,13 +245,16 @@ local function damagePulse()
 				end
 			end
 
-			-- High MS Ping Touch Interest Assistance
+			-- 3. Touch Interest Assistance
 			if fireTouch and #TargetPartsBuffer > 0 then
 				local touchPart = getToolTouchPart(tool)
 				if touchPart and touchPart.Parent then
-					for _, enemyPart in ipairs(TargetPartsBuffer) do
-						pcall(fireTouch, touchPart, enemyPart, 0)
-						pcall(fireTouch, touchPart, enemyPart, 1)
+					for p = 1, #TargetPartsBuffer do
+						local enemyPart = TargetPartsBuffer[p]
+						if enemyPart and enemyPart.Parent then
+							pcall(fireTouch, touchPart, enemyPart, 0)
+							pcall(fireTouch, touchPart, enemyPart, 1)
+						end
 					end
 				end
 			end
@@ -333,7 +338,7 @@ ContentLayout.SortOrder = Enum.SortOrder.LayoutOrder
 ContentLayout.Padding = UDim.new(0, 5)
 ContentLayout.Parent = Content
 
--- Helper: Cyber Button Creator
+-- Cyber Button Factory
 local function createCyberButton(text: string, height: number, order: number): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Size = UDim2.new(1, 0, 0, height)
@@ -518,7 +523,7 @@ local function updateUI()
 	end
 
 	ModeButton.Text = "MODE: " .. string.upper(Mode) .. " [F]"
-	APSLabel.Text = tostring(Mode == "Max" and 10 or APS)
+	APSLabel.Text = tostring(Mode == "Max" and 25 or APS)
 	ToolsLabel.Text = tostring(MAX_TOOLS)
 
 	local isMax = (Mode == "Max")
@@ -531,7 +536,7 @@ local function setState(newState: boolean)
 	updateUI()
 
 	if Active then
-		requestReequip()
+		syncEquippedTools()
 	else
 		ReequipToken += 1
 
@@ -577,7 +582,7 @@ end)
 
 APSPlus.MouseButton1Click:Connect(function()
 	if Mode ~= "Max" then
-		APS = math.min(1000, APS + 10)
+		APS = math.min(150, APS + 10)
 		updateUI()
 	end
 end)
@@ -585,11 +590,17 @@ end)
 ToolsMinus.MouseButton1Click:Connect(function()
 	MAX_TOOLS = math.max(1, MAX_TOOLS - 1)
 	updateUI()
+	if Active then
+		syncEquippedTools()
+	end
 end)
 
 ToolsPlus.MouseButton1Click:Connect(function()
 	MAX_TOOLS = math.min(10, MAX_TOOLS + 1)
 	updateUI()
+	if Active then
+		syncEquippedTools()
+	end
 end)
 
 -- Keybinds: [E] Toggle, [F] Mode
@@ -605,8 +616,6 @@ end))
 -- ================================================================
 -- 9. CHARACTER BIND & INSTANT HEALTH MONITORING
 -- ================================================================
-local deathConn: RBXScriptConnection? = nil
-
 local function hookCharacter(char: Model)
 	CurrentCharacter = char
 	CurrentRoot = getHRP(char)
@@ -618,16 +627,15 @@ local function hookCharacter(char: Model)
 
 	local hum = char:WaitForChild("Humanoid", 5)
 	if hum and hum:IsA("Humanoid") then
-		-- Early re-equip guide trigger (latency compensation before death)
 		table.insert(CharacterConnections, hum.HealthChanged:Connect(function(hp: number)
 			if Active and hp <= 20 and hp > 0 then
-				requestReequip()
+				syncEquippedTools()
 			end
 		end))
 
 		table.insert(CharacterConnections, hum.Died:Connect(function()
 			if Active then
-				requestReequip()
+				syncEquippedTools()
 			end
 		end))
 	end
@@ -640,12 +648,12 @@ local function hookCharacter(char: Model)
 
 	table.insert(CharacterConnections, char.ChildRemoved:Connect(function(child: Instance)
 		if child:IsA("Tool") and Active then
-			cacheTools()
+			task.defer(syncEquippedTools)
 		end
 	end))
 
 	if Active then
-		requestReequip()
+		syncEquippedTools()
 	end
 end
 
@@ -658,7 +666,7 @@ local function bindBackpack(backpack: Backpack?)
 	if not backpack then return end
 	track(backpack.ChildAdded:Connect(function(child: Instance)
 		if child:IsA("Tool") and Active then
-			requestReequip()
+			task.defer(syncEquippedTools)
 		end
 	end))
 end
@@ -668,19 +676,20 @@ track(LocalPlayer.ChildAdded:Connect(function(child: Instance)
 	if child:IsA("Backpack") then
 		bindBackpack(child :: Backpack)
 		if Active then
-			requestReequip()
+			syncEquippedTools()
 		end
 	end
 end))
 
 -- ================================================================
--- 10. ULTRA-FAST RUNNER
+-- 10. STEADY HIGH-RATE RUNNER (ZERO PING-SPIKE PACER)
 -- ================================================================
 track(RunService.PreSimulation:Connect(function()
 	if not Active then return end
 
 	local now = os.clock()
-	local effectiveAPS = (Mode == "Max" and 10 or APS)
+	-- Cadenced rate pacing: Max uses 25 APS, Normal uses user APS (10-150)
+	local effectiveAPS = (Mode == "Max" and 25 or math.clamp(APS, 10, 150))
 	local pulseInterval = 1 / effectiveAPS
 
 	if now - LastPulse < pulseInterval then return end
@@ -689,7 +698,12 @@ track(RunService.PreSimulation:Connect(function()
 	local char = CurrentCharacter
 	if not char then return end
 
-	cacheTools()
+	-- Continuously verify that the exact MAX_TOOLS count is equipped
+	if #ToolsCache ~= MAX_TOOLS then
+		syncEquippedTools()
+	else
+		cacheTools()
+	end
 
 	if #ToolsCache > 0 then
 		damagePulse()
@@ -697,4 +711,4 @@ track(RunService.PreSimulation:Connect(function()
 end))
 
 updateUI()
-print("[Use Tools] CIPHER // USE TOOLS V4.1 Loaded successfully (Weld-Free Edition).")
+print("[Use Tools] CIPHER // USE TOOLS V4.2 Loaded successfully (Max Weapons Simultaneous Equipper).")
