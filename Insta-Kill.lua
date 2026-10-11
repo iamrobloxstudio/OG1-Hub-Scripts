@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // INSTA-KILL BURST AURA V4.1 (HEADLESS ALWAYS-ON)
--- Hyper-Burst Target Lock & 90Hz Multi-Part Destruction Engine
--- High MS Ping Double-Tap Replication | Headless // Always Active
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
@@ -21,12 +14,12 @@ if not fireTouch then
 end
 
 -- Configuration
-local RANGE: number           = 40
+local RANGE: number           = 50
 local RANGE_SQ: number        = RANGE * RANGE
-local TOUCH_BURST: number     = 4      -- touch pairs per target part per pulse
-local REMOTE_BURST: number    = 3      -- remote fires per remote per pulse
+local TOUCH_BURST: number     = 6      -- touch pairs per target part per pulse
+local REMOTE_BURST: number    = 4      -- remote fires per remote per pulse
 local TARGET_REFRESH: number  = 1 / 60 -- 60 Hz target scan
-local ACTIVE_INTERVAL: number = 1 / 90 -- 90 Hz attack while target exists
+local ACTIVE_INTERVAL: number = 1 / 120 -- 120 Hz attack while target exists
 local IDLE_INTERVAL: number   = 1 / 30
 local Active: boolean         = true
 
