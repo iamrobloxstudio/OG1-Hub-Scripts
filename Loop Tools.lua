@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // LOOP TOOLS V4.0 (STANDALONE SSS EDITION)
--- Continuous Tool Target Snapper & Torso Touch Burst Engine
--- High MS Ping Double-Tap Replication | Draggable Cyber SSS UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -325,8 +318,15 @@ local function moveToolsToTarget(targetChar: Model)
 			part.Position = targetPos
 
 			if fireTouch then
-				pcall(fireTouch, part, torso, 0)
-				pcall(fireTouch, part, torso, 1)
+				local hrp = targetChar:FindFirstChild("HumanoidRootPart")
+				for _ = 1, 4 do
+					pcall(fireTouch, part, torso, 0)
+					pcall(fireTouch, part, torso, 1)
+					if hrp and hrp:IsA("BasePart") then
+						pcall(fireTouch, part, hrp, 0)
+						pcall(fireTouch, part, hrp, 1)
+					end
+				end
 			end
 		end
 	end
