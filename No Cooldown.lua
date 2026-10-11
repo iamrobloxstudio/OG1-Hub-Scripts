@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // NO COOLDOWN MAX-SPEED HOOK ENGINE V4.1 (HEADLESS ALWAYS-ON)
--- Instant-Activated Zero-Delay PostSimulation Frame Dispatch Hook
--- Headless | Always Active | Zero UI Overhead | High MS Ping Overrider
--- ================================================================
-
 local RunService = game:GetService("RunService")
 local PostSim: RBXScriptSignal = RunService.PostSimulation
 
