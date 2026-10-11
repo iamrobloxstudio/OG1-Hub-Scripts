@@ -1,12 +1,6 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // QUANTUM RESPAWN V4.0 (STANDALONE SSS EDITION)
--- Ultra-Low Latency Auto-Respawn & Guide Pre-Trigger Engine
--- Early Damage Detection | High MS Ping Fail-Safe | Cyber SSS UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
@@ -29,16 +23,16 @@ local THEME = {
 }
 
 local TOGGLE_KEY: Enum.KeyCode = Enum.KeyCode.R
-local HEALTH_THRESHOLD: number = 20    -- Early detection: pre-empts death packet latency
-local FAILSAFE_TIME: number    = 0.10  -- Immediate local respawn if remote fails
-local BACKUP_DELAY: number     = 0.05
-local MIN_FIRE_INTERVAL: number = 0.20
+local HEALTH_THRESHOLD: number = 40    -- Ultra-early detection (triggers before lethal burst)
+local BURST_DROP_THRESHOLD: number = 15 -- Instant trigger if health drops by >= 15 in one frame
+local MIN_FIRE_INTERVAL: number = 0.05 -- Ultra-responsive re-fire interval
 
--- State
-local Active: boolean          = false
+-- State: ALWAYS ACTIVE BY DEFAULT
+local Active: boolean          = true
 local isFiring: boolean        = false
 local lastRequestTime: number  = 0
 local characterToken: number   = 0
+local lastObservedHealth: number = 100
 local activeCharConns: { RBXScriptConnection } = {}
 
 local function disconnectCharConns()
@@ -71,45 +65,53 @@ local existingUI = guiContainer:FindFirstChild("CipherRespawnUI")
 if existingUI then existingUI:Destroy() end
 
 -- ================================================================
--- 3. REMOTE DISCOVERY CACHING
+-- 3. MULTI-CONTAINER REMOTE DISCOVERY CACHING
 -- ================================================================
 local cachedRemotes: { RemoteEvent } = {}
 
-local function refreshRespawnRemotes()
-	table.clear(cachedRemotes)
-	if not ReplicatedStorage then return end
-
-	for _, o in ipairs(ReplicatedStorage:GetDescendants()) do
-		if o:IsA("RemoteEvent") then
-			local n = string.lower(o.Name)
-			if string.find(n, "respawn", 1, true)
-				or string.find(n, "spawn", 1, true)
-				or string.find(n, "guide", 1, true)
-				or string.find(n, "reset", 1, true)
-				or string.find(n, "death", 1, true)
-				or string.find(n, "load", 1, true) then
-				table.insert(cachedRemotes, o)
+local function evaluateRemote(inst: Instance)
+	if inst:IsA("RemoteEvent") then
+		local n = string.lower(inst.Name)
+		if string.find(n, "respawn", 1, true)
+			or string.find(n, "spawn", 1, true)
+			or string.find(n, "guide", 1, true)
+			or string.find(n, "reset", 1, true)
+			or string.find(n, "death", 1, true)
+			or string.find(n, "load", 1, true)
+			or string.find(n, "char", 1, true) then
+			if not table.find(cachedRemotes, inst) then
+				table.insert(cachedRemotes, inst)
 			end
 		end
 	end
 end
 
-refreshRespawnRemotes()
-if ReplicatedStorage then
-	ReplicatedStorage.DescendantAdded:Connect(function(inst: Instance)
-		if inst:IsA("RemoteEvent") then
-			local n = string.lower(inst.Name)
-			if string.find(n, "respawn", 1, true)
-				or string.find(n, "spawn", 1, true)
-				or string.find(n, "guide", 1, true) then
-				table.insert(cachedRemotes, inst)
-			end
+local function refreshRespawnRemotes()
+	table.clear(cachedRemotes)
+
+	if ReplicatedStorage then
+		for _, o in ipairs(ReplicatedStorage:GetDescendants()) do
+			evaluateRemote(o)
 		end
-	end)
+	end
+
+	for _, o in ipairs(Workspace:GetDescendants()) do
+		evaluateRemote(o)
+	end
+
+	for _, o in ipairs(LocalPlayer:GetDescendants()) do
+		evaluateRemote(o)
+	end
+end
+
+refreshRespawnRemotes()
+
+if ReplicatedStorage then
+	ReplicatedStorage.DescendantAdded:Connect(evaluateRemote)
 end
 
 -- ================================================================
--- 4. QUANTUM RESPAWN ENGINE (PARALLEL DISPATCH)
+-- 4. QUANTUM PRE-EMPTIVE RESPAWN ENGINE
 -- ================================================================
 local function fireRespawn()
 	if isFiring then return end
@@ -121,7 +123,15 @@ local function fireRespawn()
 	characterToken += 1
 	disconnectCharConns()
 
-	-- Parallel dispatch to all candidate remotes
+	-- 1. Trigger Guide() immediately if exposed by Use Tools or environment
+	pcall(function()
+		local genv = getgenv and type(getgenv) == "function" and getgenv()
+		if genv and typeof(genv.Guide) == "function" then
+			task.spawn(genv.Guide)
+		end
+	end)
+
+	-- 2. Parallel dispatch to all discovered remotes simultaneously
 	if #cachedRemotes > 0 then
 		for _, r in ipairs(cachedRemotes) do
 			if r and r.Parent then
@@ -130,29 +140,20 @@ local function fireRespawn()
 				end)
 			end
 		end
-	else
-		task.delay(BACKUP_DELAY, function()
-			if Active then
-				pcall(LocalPlayer.LoadCharacter, LocalPlayer)
-			end
-		end)
 	end
 
-	-- High MS Ping failsafe
-	task.delay(FAILSAFE_TIME, function()
-		if not Active then return end
-		if os.clock() - lastRequestTime >= FAILSAFE_TIME then
-			pcall(LocalPlayer.LoadCharacter, LocalPlayer)
-		end
+	-- 3. Immediate local respawn trigger with zero delay
+	task.spawn(function()
+		pcall(LocalPlayer.LoadCharacter, LocalPlayer)
 	end)
 
-	task.delay(0.12, function()
+	task.delay(0.08, function()
 		isFiring = false
 	end)
 end
 
 -- ================================================================
--- 5. EARLY HEALTH & STATE MONITOR
+-- 5. ULTRA-EARLY HEALTH DROP & STATE MONITOR
 -- ================================================================
 local function hookCharacter(char: Model)
 	characterToken += 1
@@ -162,7 +163,9 @@ local function hookCharacter(char: Model)
 	local hum = char:WaitForChild("Humanoid", 5)
 	if not (hum and hum:IsA("Humanoid")) then return end
 
+	lastObservedHealth = hum.Health
 	local triggered = false
+
 	local function trigger()
 		if triggered then return end
 		if not Active then return end
@@ -171,22 +174,27 @@ local function hookCharacter(char: Model)
 		fireRespawn()
 	end
 
-	-- 1. Pre-emptive health threshold trigger
+	-- 1. Pre-emptive health threshold & burst drop detection
 	table.insert(activeCharConns, hum.HealthChanged:Connect(function(hp: number)
-		if hp <= HEALTH_THRESHOLD then
+		local drop = lastObservedHealth - hp
+		lastObservedHealth = hp
+
+		-- Fires if health drops below 40 OR if sudden burst damage >= 15 occurs
+		if hp <= HEALTH_THRESHOLD or drop >= BURST_DROP_THRESHOLD then
 			trigger()
 		end
 	end))
 
-	-- 2. State trigger (Dead, Ragdoll, FallingDown)
+	-- 2. State trigger (Dead, Ragdoll, FallingDown, Physics)
 	table.insert(activeCharConns, hum.StateChanged:Connect(function(_, newState: Enum.HumanoidStateType)
 		if newState == Enum.HumanoidStateType.Dead
-			or newState == Enum.HumanoidStateType.Ragdoll then
+			or newState == Enum.HumanoidStateType.Ragdoll
+			or newState == Enum.HumanoidStateType.FallingDown then
 			trigger()
 		end
 	end))
 
-	-- 3. Died fallback
+	-- 3. Died event
 	table.insert(activeCharConns, hum.Died:Connect(trigger))
 end
 
@@ -197,6 +205,10 @@ LocalPlayer.CharacterAdded:Connect(function(char: Model)
 		end
 	end)
 end)
+
+if LocalPlayer.Character then
+	hookCharacter(LocalPlayer.Character)
+end
 
 -- ================================================================
 -- 6. SSS RED CYBER HACKER DRAGGABLE GUI
@@ -253,7 +265,7 @@ HeaderTitle.Parent = Header
 local StatusDot = Instance.new("Frame")
 StatusDot.Size = UDim2.fromOffset(8, 8)
 StatusDot.Position = UDim2.new(1, -16, 0.5, -4)
-StatusDot.BackgroundColor3 = THEME.AccentDim
+StatusDot.BackgroundColor3 = THEME.ActiveGreen
 StatusDot.BorderSizePixel = 0
 StatusDot.Parent = Header
 
@@ -269,8 +281,8 @@ ToggleButton.Position = UDim2.new(0, 8, 0, 28)
 ToggleButton.BackgroundColor3 = THEME.CardBg
 ToggleButton.Font = Enum.Font.GothamBold
 ToggleButton.TextSize = 12
-ToggleButton.TextColor3 = THEME.AccentRed
-ToggleButton.Text = "⚡ RESPAWN: STANDBY [R]"
+ToggleButton.TextColor3 = THEME.ActiveGreen
+ToggleButton.Text = "⚡ RESPAWN: ACTIVE // ONLINE"
 ToggleButton.AutoButtonColor = false
 ToggleButton.Parent = MainCard
 
@@ -370,4 +382,4 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gpe: boolean)
 	end
 end)
 
-print("[Respawn] CIPHER // QUANTUM RESPAWN V4.0 Loaded successfully.")
+print("[Respawn] CIPHER // QUANTUM RESPAWN V5.0 Loaded (Pre-Emptive SSS Edition).")
