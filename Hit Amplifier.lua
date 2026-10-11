@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // HIT AMPLIFIER V4.0 (STANDALONE SSS EDITION)
--- High-Performance Proximity Tool Trigger & FightEvent Burst Engine
--- Low CPU Overhead | Draggable SSS Red Cyber Hacker UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,10 +21,10 @@ local THEME = {
 	TextMuted   = Color3.fromRGB(140, 145, 165),
 }
 
-local RANGE_STUDS: number    = 32
+local RANGE_STUDS: number    = 45
 local HIT_RANGE: Vector3     = Vector3.new(RANGE_STUDS, RANGE_STUDS, RANGE_STUDS)
 local SCAN_RATE: number      = 1 / 60
-local BURST_COUNT: number    = 3
+local BURST_COUNT: number    = 5
 local TOGGLE_KEY: Enum.KeyCode = Enum.KeyCode.H
 local Active: boolean        = true
 
