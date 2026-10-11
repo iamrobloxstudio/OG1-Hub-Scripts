@@ -1,11 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // KILL AURA V4.1 (HEADLESS ALWAYS-ON)
--- High-Precision 45Hz Full-Body Multi-Touch Aura Engine
--- High MS Ping Double-Tap Replication | Anti-Snag 1v1 Escape Synergy
--- Headless // Always Active // Zero UI Overhead
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local CoreGui = game:GetService("CoreGui")
@@ -21,11 +13,10 @@ if not fireTouch then
 	warn("[Kill Aura] firetouchinterest executor closure not found. Touch damage disabled.")
 end
 
--- Configuration
-local RANGE: number       = 32
+-- Configuration (Maximized Reach & Burst Pacing)
+local RANGE: number       = 45
 local RANGE_SQ: number    = RANGE * RANGE
-local TOUCH_BURST: number = 4
-local AURA_RATE: number   = 1 / 45
+local TOUCH_BURST: number = 5
 local Active: boolean     = true
 
 -- ================================================================
@@ -45,9 +36,13 @@ pcall(function()
 end)
 
 -- ================================================================
--- 1. TOOL CACHING ENGINE (ANTI-SNAG 1V1 ESCAPE SYNERGY)
+-- 1. TOOL CACHING ENGINE & ACTIVATION HOOK
 -- ================================================================
 local toolParts: { BasePart } = {}
+local hookedTools: { [Tool]: boolean } = {}
+
+-- Forward declaration of hit burst
+local fireAuraBurst: () -> ()
 
 local function rebuildToolParts()
 	table.clear(toolParts)
@@ -56,17 +51,37 @@ local function rebuildToolParts()
 
 	for _, t in ipairs(char:GetChildren()) do
 		if t:IsA("Tool") then
-			local tx = t:FindFirstChildWhichIsA("TouchTransmitter", true)
-			local part = tx and tx.Parent
-			if not (part and part:IsA("BasePart")) then
-				part = t:FindFirstChild("Handle")
+			-- Gather all touchable parts inside the tool
+			for _, obj in ipairs(t:GetDescendants()) do
+				if obj:IsA("TouchTransmitter") and obj.Parent and obj.Parent:IsA("BasePart") then
+					local p = obj.Parent
+					p.CanCollide = false
+					p.Massless = true
+					p.CanTouch = true
+					if not table.find(toolParts, p) then
+						table.insert(toolParts, p)
+					end
+				end
 			end
-			if part and part:IsA("BasePart") then
-				-- Anti-snag physics configuration for seamless 1v1 escape
-				part.CanCollide = false
-				part.Massless = true
-				part.CanTouch = true
-				table.insert(toolParts, part)
+
+			local handle = t:FindFirstChild("Handle")
+			if handle and handle:IsA("BasePart") then
+				handle.CanCollide = false
+				handle.Massless = true
+				handle.CanTouch = true
+				if not table.find(toolParts, handle) then
+					table.insert(toolParts, handle)
+				end
+			end
+
+			-- Hook tool activation for microsecond touch triggering
+			if not hookedTools[t] then
+				hookedTools[t] = true
+				t.Activated:Connect(function()
+					if Active then
+						fireAuraBurst()
+					end
+				end)
 			end
 		end
 	end
@@ -79,6 +94,7 @@ local function onToolChange(c: Instance)
 end
 
 local function hookChar(char: Model)
+	table.clear(hookedTools)
 	rebuildToolParts()
 	char.ChildAdded:Connect(onToolChange)
 	char.ChildRemoved:Connect(onToolChange)
@@ -100,93 +116,83 @@ local EXPANDED_PARTS = {
 	"LeftUpperLeg", "LeftLowerLeg", "RightFoot", "LeftFoot"
 }
 
-local enemyPartsBuffer: { BasePart } = {}
-
-local function getExpandedParts(char: Model): { BasePart }
-	table.clear(enemyPartsBuffer)
-	for i = 1, #EXPANDED_PARTS do
-		local p = char:FindFirstChild(EXPANDED_PARTS[i])
-		if p and p:IsA("BasePart") then
-			table.insert(enemyPartsBuffer, p)
-		end
-	end
-	if #enemyPartsBuffer == 0 then
-		local hrp = char:FindFirstChild("HumanoidRootPart")
-		if hrp and hrp:IsA("BasePart") then
-			table.insert(enemyPartsBuffer, hrp)
-		end
-	end
-	return enemyPartsBuffer
-end
-
 -- ================================================================
--- 3. FAST TARGET ACQUISITION (EUCLIDEAN DISTANCE SQUARED)
+-- 3. ALL IN-RANGE ENEMIES RESOLVER
 -- ================================================================
-local function getTarget(): Model?
+local targetsBuffer: { Model } = {}
+
+local function updateTargets()
+	table.clear(targetsBuffer)
 	local char = LocalPlayer.Character
-	if not char then return nil end
+	if not char then return end
 
-	local myRoot = char:FindFirstChild("HumanoidRootPart")
-	if not (myRoot and myRoot:IsA("BasePart")) then return nil end
+	local myRoot = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+	if not (myRoot and myRoot:IsA("BasePart")) then return end
 
 	local myPos = myRoot.Position
-	local bestChar: Model? = nil
-	local bestSq: number = RANGE_SQ
 
 	for _, p in ipairs(Players:GetPlayers()) do
 		if p ~= LocalPlayer then
 			local pChar = p.Character
 			if pChar then
 				local hum = pChar:FindFirstChildOfClass("Humanoid")
-				local r = pChar:FindFirstChild("HumanoidRootPart")
+				local r = pChar:FindFirstChild("HumanoidRootPart") or pChar:FindFirstChild("Torso")
 				if hum and r and r:IsA("BasePart") and hum.Health > 0 then
 					local dx = r.Position.X - myPos.X
 					local dy = r.Position.Y - myPos.Y
 					local dz = r.Position.Z - myPos.Z
-					local dsq = dx * dx + dy * dy + dz * dz
-					if dsq < bestSq then
-						bestSq = dsq
-						bestChar = pChar
+					if (dx * dx + dy * dy + dz * dz) <= RANGE_SQ then
+						table.insert(targetsBuffer, pChar)
 					end
 				end
 			end
 		end
 	end
-	return bestChar
 end
 
 -- ================================================================
--- 4. ATTACK & RUNNER (HIGH MS PING DOUBLE-TAP REPLICATION)
+-- 4. RELENTLESS AURA BURST ENGINE
 -- ================================================================
-local lastAura: number = 0
+fireAuraBurst = function()
+	if not Active or not fireTouch then return end
+	if #toolParts == 0 then
+		rebuildToolParts()
+		if #toolParts == 0 then return end
+	end
 
-RunService.Stepped:Connect(function()
-	if not Active then return end
+	updateTargets()
+	if #targetsBuffer == 0 then return end
 
-	local now = os.clock()
-	if now - lastAura < AURA_RATE then return end
-	lastAura = now
-
-	local target = getTarget()
-	if not target then return end
-
-	local partsToHit = getExpandedParts(target)
-	if #partsToHit == 0 or #toolParts == 0 or not fireTouch then return end
-
-	for i = 1, #toolParts do
-		local part = toolParts[i]
-		if part and part.Parent then
-			for j = 1, #partsToHit do
-				local enemyPart = partsToHit[j]
-				if enemyPart and enemyPart.Parent then
-					for _ = 1, TOUCH_BURST do
-						pcall(fireTouch, part, enemyPart, 0)
-						pcall(fireTouch, part, enemyPart, 1)
+	for tIndex = 1, #targetsBuffer do
+		local target = targetsBuffer[tIndex]
+		for pIndex = 1, #EXPANDED_PARTS do
+			local enemyPart = target:FindFirstChild(EXPANDED_PARTS[pIndex])
+			if enemyPart and enemyPart:IsA("BasePart") and enemyPart.Parent then
+				for i = 1, #toolParts do
+					local part = toolParts[i]
+					if part and part.Parent then
+						for _ = 1, TOUCH_BURST do
+							pcall(fireTouch, part, enemyPart, 0)
+							pcall(fireTouch, part, enemyPart, 1)
+						end
 					end
 				end
 			end
 		end
 	end
+end
+
+-- Dual-phase continuous execution on Stepped AND Heartbeat for unrelenting touch contact
+RunService.Stepped:Connect(function()
+	if Active then
+		fireAuraBurst()
+	end
 end)
 
-print("[Kill Aura] CIPHER // KILL AURA V4.1 Loaded (Always Active // Headless).")
+RunService.Heartbeat:Connect(function()
+	if Active then
+		fireAuraBurst()
+	end
+end)
+
+print("[Kill Aura] CIPHER // KILL AURA V5.0 Loaded (Relentless Multi-Target SSS Edition).")
