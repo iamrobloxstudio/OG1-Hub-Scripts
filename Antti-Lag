@@ -1,0 +1,240 @@
+-- CONFIG
+_G.FollowOffset = Vector3.new(0, 0.6, 0) -- ðŸ‘ˆ BAJADO para seguir el torso
+_G.AvoidCollisionOffset = Vector3.new(0, 0, 0.5)
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
+local bringTargets = {}
+local following = false
+
+---------------------------------------------------------
+-- NUEVOS CACHES (ANTI-LAG)
+---------------------------------------------------------
+local cachedToolParts = {}
+local cachedTorso = {}
+
+---------------------------------------------------------
+-- FUNCION CLAVE (ORIGINAL - NO TOCADA)
+---------------------------------------------------------
+local function getToolPart(tool)
+	if tool:FindFirstChild("Handle") and tool.Handle:IsA("BasePart") then
+		return tool.Handle
+	end
+
+	if tool.PrimaryPart and tool.PrimaryPart:IsA("BasePart") then
+		return tool.PrimaryPart
+	end
+
+	for _, v in ipairs(tool:GetDescendants()) do
+		if v:IsA("BasePart") then
+			return v
+		end
+	end
+
+	return nil
+end
+
+---------------------------------------------------------
+-- NUEVA FUNCION: CACHEAR TOOLS (NO REEMPLAZA)
+---------------------------------------------------------
+local function updateToolCache()
+	table.clear(cachedToolParts)
+	if not LocalPlayer.Character then return end
+
+	for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
+		if tool:IsA("Tool") then
+			local part = getToolPart(tool)
+			if part then
+				cachedToolParts[#cachedToolParts + 1] = part
+			end
+		end
+	end
+end
+
+---------------------------------------------------------
+-- NUEVA FUNCION: CACHEAR TORSO OBJETIVO (FORZADO A TORSO)
+---------------------------------------------------------
+local function getCachedTorso(char)
+	if cachedTorso[char] and cachedTorso[char].Parent then
+		return cachedTorso[char]
+	end
+
+	local torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
+	cachedTorso[char] = torso
+	return torso
+end
+
+---------------------------------------------------------
+-- GUI (ORIGINAL)
+---------------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "ToolFollowGUI"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Parent = gui
+toggleBtn.Size = UDim2.new(0, 40, 0, 40)
+toggleBtn.Position = UDim2.new(1, -50, 0, 100)
+toggleBtn.Text = "â‡©"
+toggleBtn.TextScaled = true
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Instance.new("UICorner", toggleBtn).CornerRadius = UDim.new(1, 0)
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Position = UDim2.new(1, -250, 0, 145)
+frame.Size = UDim2.new(0, 220, 0, 260)
+frame.BackgroundColor3 = Color3.fromRGB(25, 5, 5)
+frame.Visible = false
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+Instance.new("UIStroke", frame).Color = Color3.fromRGB(200, 0, 0)
+
+local scroll = Instance.new("ScrollingFrame", frame)
+scroll.Position = UDim2.new(0, 0, 0, 10)
+scroll.Size = UDim2.new(1, 0, 1, -10)
+scroll.BackgroundTransparency = 1
+scroll.ScrollBarThickness = 5
+
+local layout = Instance.new("UIListLayout", scroll)
+layout.Padding = UDim.new(0, 3)
+
+---------------------------------------------------------
+-- TOOL FOLLOW SYSTEM (ORIGINAL + CACHE)
+---------------------------------------------------------
+local function moveToolsToTarget(targetChar)
+	local torso = getCachedTorso(targetChar)
+	if not torso then return end
+
+	for _, part in ipairs(cachedToolParts) do
+		if part and part.Parent then
+			part.Position =
+				torso.Position
+				+ _G.FollowOffset
+				+ _G.AvoidCollisionOffset
+
+			firetouchinterest(part, torso, 0)
+			firetouchinterest(part, torso, 1)
+		end
+	end
+end
+
+---------------------------------------------------------
+-- LOOP PRINCIPAL (MISMO FUNCIONAMIENTO)
+---------------------------------------------------------
+local function startFollowing()
+	if following then return end
+	following = true
+
+	RunService.Heartbeat:Connect(function()
+		if #bringTargets == 0 then return end
+		if not LocalPlayer.Character then return end
+
+		for _, name in ipairs(bringTargets) do
+			local plr = Players:FindFirstChild(name)
+			if plr and plr.Character then
+				moveToolsToTarget(plr.Character)
+			end
+		end
+	end)
+end
+
+---------------------------------------------------------
+-- FIX FISICA (ORIGINAL)
+---------------------------------------------------------
+local function fixToolPhysics()
+	if not LocalPlayer.Character then return end
+
+	for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
+		if tool:IsA("Tool") then
+			local part = getToolPart(tool)
+			if part then
+				part.CanCollide = false
+				part.Massless = true
+			end
+		end
+	end
+end
+
+---------------------------------------------------------
+-- RESPAWN + CACHE
+---------------------------------------------------------
+LocalPlayer.CharacterAdded:Connect(function(char)
+	char:WaitForChild("HumanoidRootPart")
+	updateToolCache()
+
+	char.ChildAdded:Connect(function(child)
+		if child:IsA("Tool") then
+			task.wait()
+			updateToolCache()
+			local part = getToolPart(child)
+			if part then
+				part.CanCollide = false
+				part.Massless = true
+			end
+		end
+	end)
+
+	fixToolPhysics()
+end)
+
+updateToolCache()
+fixToolPhysics()
+
+---------------------------------------------------------
+-- LISTA DE JUGADORES (ORIGINAL)
+---------------------------------------------------------
+local function refreshList()
+	for _, child in ipairs(scroll:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			local btn = Instance.new("TextButton")
+			btn.Parent = scroll
+			btn.Size = UDim2.new(1, -8, 0, 28)
+			btn.Text = p.Name
+			btn.Font = Enum.Font.Gotham
+			btn.TextScaled = true
+			btn.BackgroundColor3 = Color3.fromRGB(40, 0, 0)
+			btn.TextColor3 =
+				table.find(bringTargets, p.Name)
+				and Color3.fromRGB(255, 255, 255)
+				or Color3.fromRGB(0, 255, 0)
+
+			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+			btn.MouseButton1Click:Connect(function()
+				if table.find(bringTargets, p.Name) then
+					table.remove(bringTargets, table.find(bringTargets, p.Name))
+				else
+					table.insert(bringTargets, p.Name)
+					startFollowing()
+				end
+				refreshList()
+			end)
+		end
+	end
+
+	scroll.CanvasSize = UDim2.new(0, 0, 0, #Players:GetPlayers() * 32)
+end
+
+Players.PlayerAdded:Connect(refreshList)
+Players.PlayerRemoving:Connect(refreshList)
+
+---------------------------------------------------------
+-- TOGGLE GUI
+---------------------------------------------------------
+toggleBtn.MouseButton1Click:Connect(function()
+	frame.Visible = not frame.Visible
+end)
+
+refreshList()
+startFollowing()
