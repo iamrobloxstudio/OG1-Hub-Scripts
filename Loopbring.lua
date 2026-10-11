@@ -1,10 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // AGGRESSIVE LOOPBRING V4.0 (STANDALONE SSS EDITION)
--- Hyper-Aggressive Multi-Phase Player Teleport & Physics Lock
--- High MS Ping Anti-Rubberbanding | SSS Red Cyber Hacker UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -331,9 +324,10 @@ local function executeBringCycle()
 	end
 end
 
--- Fire on both Stepped and PreRender to overpower server rubberband replication
+-- Fire on Stepped, PreRender, and Heartbeat to overpower server rubberband replication
 RunService.Stepped:Connect(executeBringCycle)
 RunService.PreRender:Connect(executeBringCycle)
+RunService.Heartbeat:Connect(executeBringCycle)
 
 -- ================================================================
 -- 5. PLAYER LIST GENERATION & CONTROLS
