@@ -1,11 +1,3 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // USE TOOLS V4.3 (STANDALONE SSS EDITION)
--- Persistent Respawn Multi-Tool Equipper & Steady Activation Spam
--- Instant Respawn Tool Acquisition Loop | Zero Ping-Spike Cadence Pacer
--- Anti-Snag 1v1 Escape Physics | Draggable SSS Red Cyber Hacker UI
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -34,15 +26,15 @@ local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest
 	or (getgenv and (getgenv().firetouchinterest or getgenv().fire_touch_interest))
 	or (syn and syn.firetouchinterest)
 
--- Configuration (10 - 150 APS, 1 - 10 Tools)
-local APS: number                = 60
+-- Configuration (10 - 250 APS, 1 - 10 Tools)
+local APS: number                = 90
 local MAX_TOOLS: number          = 5
-local TOUCH_ASSIST_RANGE: number = 16
+local TOUCH_ASSIST_RANGE: number = 24
 local TOUCH_ASSIST_SQ: number    = TOUCH_ASSIST_RANGE * TOUCH_ASSIST_RANGE
 
--- Modes: "Normal" (Activate only), "Event" (FightEvent only), "Max" (Both with steady 25 APS)
+-- Modes: "Normal" (Activate only), "Event" (FightEvent only), "Max" (Both with hyper 40 APS)
 local Mode: string               = "Normal"
-local Active: boolean            = true -- Persists across respawns by default
+local Active: boolean            = true -- Always active and persistent across all respawns
 
 -- State - cached references for zero GC overhead
 local ToolsCache: { Tool }       = {}
@@ -127,7 +119,6 @@ end
 -- ================================================================
 -- 5. INSTANT RESPAWN EQUIP LOOP (PERSISTENT 1V1 SYNERGY)
 -- ================================================================
--- Runs a tight frame-by-frame polling loop on respawn until MAX_TOOLS are equipped, then terminates.
 local function runFastEquipLoop()
 	if not Active then return end
 	if isEquipLoopRunning then return end
@@ -138,7 +129,7 @@ local function runFastEquipLoop()
 
 	task.spawn(function()
 		local startTime = os.clock()
-		local maxTimeout = 2.0 -- Max 2 seconds failsafe
+		local maxTimeout = 2.5
 
 		while Active and (ReequipToken == myToken) and (os.clock() - startTime < maxTimeout) do
 			local char = LocalPlayer.Character or CurrentCharacter
@@ -147,7 +138,6 @@ local function runFastEquipLoop()
 			if char and backpack then
 				local hum = char:FindFirstChildOfClass("Humanoid")
 				if hum and hum.Health > 0 then
-					-- Count tools currently in character
 					local currentEquipped: { Tool } = {}
 					for _, c in ipairs(char:GetChildren()) do
 						if c:IsA("Tool") then
@@ -158,13 +148,12 @@ local function runFastEquipLoop()
 
 					local count = #currentEquipped
 
-					-- Equip missing weapons from backpack simultaneously
+					-- Concurrently parent tools from backpack to character
 					if count < MAX_TOOLS then
 						local needed = MAX_TOOLS - count
 						for _, tool in ipairs(backpack:GetChildren()) do
 							if tool:IsA("Tool") then
 								sanitizeToolPhysics(tool)
-								-- Direct parenting allows simultaneous multi-tool equipping
 								tool.Parent = char
 								count += 1
 								needed -= 1
@@ -172,7 +161,6 @@ local function runFastEquipLoop()
 							end
 						end
 					elseif count > MAX_TOOLS then
-						-- Unequip excess weapons back to backpack
 						for i = MAX_TOOLS + 1, count do
 							local tool = currentEquipped[i]
 							if tool and tool.Parent == char then
@@ -183,8 +171,6 @@ local function runFastEquipLoop()
 
 					cacheTools()
 
-					-- Check termination condition:
-					-- Stop loop once MAX_TOOLS are equipped, or if backpack has no more tools available
 					local backpackRemaining = 0
 					for _, t in ipairs(backpack:GetChildren()) do
 						if t:IsA("Tool") then
@@ -193,7 +179,6 @@ local function runFastEquipLoop()
 					end
 
 					if #ToolsCache >= MAX_TOOLS or (#ToolsCache > 0 and backpackRemaining == 0) then
-						-- Fully equipped! End loop immediately so zero CPU is wasted
 						break
 					end
 				end
@@ -207,13 +192,21 @@ local function runFastEquipLoop()
 	end)
 end
 
--- Quick synchronization helper
 local function syncEquippedTools()
 	runFastEquipLoop()
 end
 
+-- Environment Guide() hook so other scripts or remotes can trigger it
+pcall(function()
+	if getgenv and type(getgenv) == "function" then
+		getgenv().Guide = function()
+			runFastEquipLoop()
+		end
+	end
+end)
+
 -- ================================================================
--- 6. DAMAGE PULSE (STEADY HIGH-RATE ACTIVATION // NO PING SPIKES)
+-- 6. UNCONDITIONAL SPAM & PROXIMITY TOUCH ASSIST
 -- ================================================================
 local function getToolTouchPart(tool: Tool): BasePart?
 	local handle = tool:FindFirstChild("Handle")
@@ -229,43 +222,19 @@ local function getToolTouchPart(tool: Tool): BasePart?
 end
 
 local function damagePulse()
-	if #ToolsCache == 0 then return end
 	local char = CurrentCharacter or LocalPlayer.Character
-	local root = CurrentRoot
-	if not char or not root then return end
+	if not char then return end
 
-	-- Find enemy parts within touch range using squared distance
-	table.clear(TargetPartsBuffer)
-	local myPos = root.Position
-
-	for _, player in ipairs(Players:GetPlayers()) do
-		if player ~= LocalPlayer then
-			local pChar = player.Character
-			if pChar then
-				local hum = pChar:FindFirstChildOfClass("Humanoid")
-				local pRoot = pChar:FindFirstChild("HumanoidRootPart")
-				if hum and pRoot and pRoot:IsA("BasePart") and hum.Health > 0 then
-					local dx = pRoot.Position.X - myPos.X
-					local dy = pRoot.Position.Y - myPos.Y
-					local dz = pRoot.Position.Z - myPos.Z
-					if (dx * dx + dy * dy + dz * dz) <= TOUCH_ASSIST_SQ then
-						table.insert(TargetPartsBuffer, pRoot)
-					end
-				end
-			end
-		end
-	end
-
-	-- Dispatch tool actions to ALL simultaneously equipped tools
+	-- 1. UNCONDITIONAL TOOL SPAM (Runs regardless of players nearby!)
 	for i = 1, #ToolsCache do
 		local tool = ToolsCache[i]
 		if tool and tool.Parent == char then
-			-- 1. Fast steady activation spam
+			-- Tool activation
 			if Mode == "Normal" or Mode == "Max" then
 				pcall(tool.Activate, tool)
 			end
 
-			-- 2. FightEvent Remote Trigger (Single steady fire per tool per pulse)
+			-- Fight remote dispatch
 			if Mode == "Event" or Mode == "Max" then
 				local remote = tool:FindFirstChild("FightEvent")
 				if not remote then
@@ -283,16 +252,45 @@ local function damagePulse()
 					pcall(remote.FireServer, remote)
 				end
 			end
+		end
+	end
 
-			-- 3. Touch Interest Assistance
-			if fireTouch and #TargetPartsBuffer > 0 then
-				local touchPart = getToolTouchPart(tool)
-				if touchPart and touchPart.Parent then
-					for p = 1, #TargetPartsBuffer do
-						local enemyPart = TargetPartsBuffer[p]
-						if enemyPart and enemyPart.Parent then
-							pcall(fireTouch, touchPart, enemyPart, 0)
-							pcall(fireTouch, touchPart, enemyPart, 1)
+	-- 2. PARALLEL PROXIMITY TOUCH ASSIST (Damage multiplier when opponents enter range)
+	local root = CurrentRoot or getHRP(char)
+	if root and fireTouch then
+		table.clear(TargetPartsBuffer)
+		local myPos = root.Position
+
+		for _, player in ipairs(Players:GetPlayers()) do
+			if player ~= LocalPlayer then
+				local pChar = player.Character
+				if pChar then
+					local hum = pChar:FindFirstChildOfClass("Humanoid")
+					local pRoot = pChar:FindFirstChild("HumanoidRootPart")
+					if hum and pRoot and pRoot:IsA("BasePart") and hum.Health > 0 then
+						local dx = pRoot.Position.X - myPos.X
+						local dy = pRoot.Position.Y - myPos.Y
+						local dz = pRoot.Position.Z - myPos.Z
+						if (dx * dx + dy * dy + dz * dz) <= TOUCH_ASSIST_SQ then
+							table.insert(TargetPartsBuffer, pRoot)
+						end
+					end
+				end
+			end
+		end
+
+		if #TargetPartsBuffer > 0 then
+			for i = 1, #ToolsCache do
+				local tool = ToolsCache[i]
+				if tool and tool.Parent == char then
+					local touchPart = getToolTouchPart(tool)
+					if touchPart and touchPart.Parent then
+						for p = 1, #TargetPartsBuffer do
+							local enemyPart = TargetPartsBuffer[p]
+							if enemyPart and enemyPart.Parent then
+								pcall(fireTouch, touchPart, enemyPart, 0)
+								pcall(fireTouch, touchPart, enemyPart, 1)
+							end
 						end
 					end
 				end
@@ -310,7 +308,6 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = parentGui
 
--- Draggable Main Container
 local MainPanel = Instance.new("Frame")
 MainPanel.Name = "MainPanel"
 MainPanel.Size = UDim2.fromOffset(220, 215)
@@ -500,7 +497,7 @@ PingBadge.BackgroundTransparency = 1
 PingBadge.Font = Enum.Font.Code
 PingBadge.TextSize = 10
 PingBadge.TextColor3 = THEME.TextMuted
-PingBadge.Text = "// MS PING COMP: 0ms CLAMP"
+PingBadge.Text = "// UNCONDITIONAL SPAM: ACTIVE"
 PingBadge.LayoutOrder = 5
 PingBadge.Parent = Content
 
@@ -562,7 +559,7 @@ local function updateUI()
 	end
 
 	ModeButton.Text = "MODE: " .. string.upper(Mode) .. " [F]"
-	APSLabel.Text = tostring(Mode == "Max" and 25 or APS)
+	APSLabel.Text = tostring(Mode == "Max" and 40 or APS)
 	ToolsLabel.Text = tostring(MAX_TOOLS)
 
 	local isMax = (Mode == "Max")
@@ -620,7 +617,7 @@ end)
 
 APSPlus.MouseButton1Click:Connect(function()
 	if Mode ~= "Max" then
-		APS = math.min(150, APS + 10)
+		APS = math.min(250, APS + 10)
 		updateUI()
 	end
 end)
@@ -665,15 +662,13 @@ local function hookCharacter(char: Model)
 
 	local hum = char:WaitForChild("Humanoid", 5)
 	if hum and hum:IsA("Humanoid") then
-		-- Latency pre-detection
 		table.insert(CharacterConnections, hum.HealthChanged:Connect(function(hp: number)
-			if Active and hp <= 20 and hp > 0 then
+			if Active and hp <= 35 and hp > 0 then
 				runFastEquipLoop()
 			end
 		end))
 
 		table.insert(CharacterConnections, hum.Died:Connect(function()
-			-- Remains Active = true! Pre-queues re-equip on death
 			if Active then
 				runFastEquipLoop()
 			end
@@ -692,7 +687,6 @@ local function hookCharacter(char: Model)
 		end
 	end))
 
-	-- Always persistently re-equip upon respawn!
 	if Active then
 		runFastEquipLoop()
 	end
@@ -702,7 +696,6 @@ if LocalPlayer.Character then
 	hookCharacter(LocalPlayer.Character)
 end
 
--- Persistent CharacterAdded hook: immediately triggers the instant equip loop
 track(LocalPlayer.CharacterAdded:Connect(function(char: Model)
 	hookCharacter(char)
 	if Active then
@@ -730,14 +723,13 @@ track(LocalPlayer.ChildAdded:Connect(function(child: Instance)
 end))
 
 -- ================================================================
--- 10. STEADY HIGH-RATE RUNNER (ZERO PING-SPIKE PACER)
+-- 10. UNCONDITIONAL RUNNER
 -- ================================================================
 track(RunService.PreSimulation:Connect(function()
 	if not Active then return end
 
 	local now = os.clock()
-	-- Cadenced rate pacing: Max uses 25 APS, Normal uses user APS (10-150)
-	local effectiveAPS = (Mode == "Max" and 25 or math.clamp(APS, 10, 150))
+	local effectiveAPS = (Mode == "Max" and 40 or math.clamp(APS, 10, 250))
 	local pulseInterval = 1 / effectiveAPS
 
 	if now - LastPulse < pulseInterval then return end
@@ -746,14 +738,14 @@ track(RunService.PreSimulation:Connect(function()
 	local char = CurrentCharacter or LocalPlayer.Character
 	if not char then return end
 
-	-- If tools are missing, trigger fast equip loop
+	-- Continuously verify tools are present
 	if #ToolsCache < MAX_TOOLS and not isEquipLoopRunning then
 		runFastEquipLoop()
 	else
 		cacheTools()
 	end
 
-	-- Instant spam execution across all equipped tools
+	-- Unconditional spam pulse
 	if #ToolsCache > 0 then
 		damagePulse()
 	end
@@ -761,4 +753,4 @@ end))
 
 updateUI()
 runFastEquipLoop()
-print("[Use Tools] CIPHER // USE TOOLS V4.3 Loaded (Persistent Respawn 1v1 Edition).")
+print("[Use Tools] CIPHER // USE TOOLS V5.0 Loaded (Unconditional Spam Edition).")
