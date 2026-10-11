@@ -1,154 +1,192 @@
--- TFL Kill Aura
--- Proximity damage system with optimized tool activation
--- Black/Green hacker theme
+--!strict
+-- ================================================================
+-- ⚡ CIPHER // KILL AURA V4.1 (HEADLESS ALWAYS-ON)
+-- High-Precision 45Hz Full-Body Multi-Touch Aura Engine
+-- High MS Ping Double-Tap Replication | Anti-Snag 1v1 Escape Synergy
+-- Headless // Always Active // Zero UI Overhead
+-- ================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
-local LocalPlayer = Players.LocalPlayer
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
--- Configuration
-local AURA_RANGE = 12
-local TOUCH_BURST = 2
-local AURA_RATE = 1/60
+-- Executor API Resolver
+local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest 
+	or (getgenv and (getgenv().firetouchinterest or getgenv().fire_touch_interest))
+	or (syn and syn.firetouchinterest)
 
--- Caches
-local ToolsCache = {}
-local LastAura = 0
-
--- Pre-allocated buffers for performance
-local TargetPartsBuffer = {}
-
--- Get HRP safely
-local function getHRP(char)
-	return char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
+if not fireTouch then
+	warn("[Kill Aura] firetouchinterest executor closure not found. Touch damage disabled.")
 end
 
--- Refresh tools cache - OPTIMIZED: single pass, pre-allocated buffer
-local function refreshTools()
-	table.clear(ToolsCache)
+-- Configuration
+local RANGE: number       = 32
+local RANGE_SQ: number    = RANGE * RANGE
+local TOUCH_BURST: number = 4
+local AURA_RATE: number   = 1 / 45
+local Active: boolean     = true
+
+-- ================================================================
+-- CLEANUP EXISTING GUI INSTANCES IF PRESENT
+-- ================================================================
+pcall(function()
+	local core = CoreGui
+	if core then
+		local old = core:FindFirstChild("CipherKillAuraUI")
+		if old then old:Destroy() end
+	end
+	local pgui = LocalPlayer:FindFirstChild("PlayerGui")
+	if pgui then
+		local old = pgui:FindFirstChild("CipherKillAuraUI")
+		if old then old:Destroy() end
+	end
+end)
+
+-- ================================================================
+-- 1. TOOL CACHING ENGINE (ANTI-SNAG 1V1 ESCAPE SYNERGY)
+-- ================================================================
+local toolParts: { BasePart } = {}
+
+local function rebuildToolParts()
+	table.clear(toolParts)
 	local char = LocalPlayer.Character
 	if not char then return end
-	
-	for _, tool in ipairs(char:GetChildren()) do
-		if tool:IsA("Tool") then
-			-- Get touch part
-			local touchPart = tool:FindFirstChildWhichIsA("TouchTransmitter", true)
-			local part = touchPart and touchPart.Parent
-			
-			if part then
-				table.insert(ToolsCache, {
-					Tool = tool,
-					TouchPart = part,
-				})
+
+	for _, t in ipairs(char:GetChildren()) do
+		if t:IsA("Tool") then
+			local tx = t:FindFirstChildWhichIsA("TouchTransmitter", true)
+			local part = tx and tx.Parent
+			if not (part and part:IsA("BasePart")) then
+				part = t:FindFirstChild("Handle")
+			end
+			if part and part:IsA("BasePart") then
+				-- Anti-snag physics configuration for seamless 1v1 escape
+				part.CanCollide = false
+				part.Massless = true
+				part.CanTouch = true
+				table.insert(toolParts, part)
 			end
 		end
 	end
 end
 
--- Get all targets in range - OPTIMIZED: pre-allocated buffer
-local function getTargets()
-	table.clear(TargetPartsBuffer)
-	local myChar = LocalPlayer.Character
-	local myRoot = myChar and getHRP(myChar)
-	if not myRoot then return TargetPartsBuffer end
-	
-	for _, plr in ipairs(Players:GetPlayers()) do
-		if plr ~= LocalPlayer then
-			local char = plr.Character
-			if char then
-				local hum = char:FindFirstChildOfClass("Humanoid")
-				local root = getHRP(char)
-				if hum and root and hum.Health > 0 then
-					local dist = (root.Position - myRoot.Position).Magnitude
-					if dist <= AURA_RANGE then
-						-- Build list of all hittable parts
-						local parts = {}
-						for _, name in ipairs({"HumanoidRootPart", "UpperTorso", "Torso", "Head"}) do
-							local part = char:FindFirstChild(name)
-							if part and part:IsA("BasePart") then
-								table.insert(parts, part)
-							end
-						end
-						if #parts > 0 then
-							table.insert(TargetPartsBuffer, {
-								Root = root,
-								Parts = parts
-							})
-						end
+local function onToolChange(c: Instance)
+	if c:IsA("Tool") then
+		task.defer(rebuildToolParts)
+	end
+end
+
+local function hookChar(char: Model)
+	rebuildToolParts()
+	char.ChildAdded:Connect(onToolChange)
+	char.ChildRemoved:Connect(onToolChange)
+end
+
+if LocalPlayer.Character then
+	hookChar(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(hookChar)
+
+-- ================================================================
+-- 2. EXPANDED BODY PART RESOLVER (R6 & R15)
+-- ================================================================
+local EXPANDED_PARTS = {
+	"HumanoidRootPart", "Head", "UpperTorso", "LowerTorso", "Torso",
+	"Right Arm", "Left Arm", "Right Leg", "Left Leg",
+	"RightHand", "LeftHand", "RightUpperArm", "RightLowerArm",
+	"LeftUpperArm", "LeftLowerArm", "RightUpperLeg", "RightLowerLeg",
+	"LeftUpperLeg", "LeftLowerLeg", "RightFoot", "LeftFoot"
+}
+
+local enemyPartsBuffer: { BasePart } = {}
+
+local function getExpandedParts(char: Model): { BasePart }
+	table.clear(enemyPartsBuffer)
+	for i = 1, #EXPANDED_PARTS do
+		local p = char:FindFirstChild(EXPANDED_PARTS[i])
+		if p and p:IsA("BasePart") then
+			table.insert(enemyPartsBuffer, p)
+		end
+	end
+	if #enemyPartsBuffer == 0 then
+		local hrp = char:FindFirstChild("HumanoidRootPart")
+		if hrp and hrp:IsA("BasePart") then
+			table.insert(enemyPartsBuffer, hrp)
+		end
+	end
+	return enemyPartsBuffer
+end
+
+-- ================================================================
+-- 3. FAST TARGET ACQUISITION (EUCLIDEAN DISTANCE SQUARED)
+-- ================================================================
+local function getTarget(): Model?
+	local char = LocalPlayer.Character
+	if not char then return nil end
+
+	local myRoot = char:FindFirstChild("HumanoidRootPart")
+	if not (myRoot and myRoot:IsA("BasePart")) then return nil end
+
+	local myPos = myRoot.Position
+	local bestChar: Model? = nil
+	local bestSq: number = RANGE_SQ
+
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LocalPlayer then
+			local pChar = p.Character
+			if pChar then
+				local hum = pChar:FindFirstChildOfClass("Humanoid")
+				local r = pChar:FindFirstChild("HumanoidRootPart")
+				if hum and r and r:IsA("BasePart") and hum.Health > 0 then
+					local dx = r.Position.X - myPos.X
+					local dy = r.Position.Y - myPos.Y
+					local dz = r.Position.Z - myPos.Z
+					local dsq = dx * dx + dy * dy + dz * dz
+					if dsq < bestSq then
+						bestSq = dsq
+						bestChar = pChar
 					end
 				end
 			end
 		end
 	end
-	
-	return TargetPartsBuffer
+	return bestChar
 end
 
--- Attack targets with tool
-local function attackTool(toolData, target)
-	local tool = toolData.Tool
-	local touch = toolData.TouchPart
-	
-	if not tool or not tool.Parent then return end
-	
-	-- Touch assist
-	if touch then
-		for _, part in ipairs(target.Parts) do
-			if part and part.Parent then
-				pcall(firetouchinterest, touch, part, 0)
-				pcall(firetouchinterest, touch, part, 1)
-			end
-		end
-	end
-end
+-- ================================================================
+-- 4. ATTACK & RUNNER (HIGH MS PING DOUBLE-TAP REPLICATION)
+-- ================================================================
+local lastAura: number = 0
 
--- Character bind
-local function onCharacterAdded()
-	-- Use Heartbeat for better responsiveness
-	RunService.Heartbeat:Wait()
-	refreshTools()
-end
+RunService.Stepped:Connect(function()
+	if not Active then return end
 
-local function onCharacterRemoving()
-	table.clear(ToolsCache)
-end
-
--- Use shared target from Loopbring if available
-local function getCurrentTarget()
-	if _G.TFLLoopbring and _G.TFLLoopbring.GetCurrentTarget then
-		return _G.TFLLoopbring.GetCurrentTarget()
-	end
-	return nil
-end
-
--- Main loop - OPTIMIZED: PreSimulation for better timing
-RunService.PreSimulation:Connect(function()
 	local now = os.clock()
-	if now - LastAura < AURA_RATE then return end
-	LastAura = now
-	
-	-- Refresh tools if character changed
-	refreshTools()
-	if #ToolsCache == 0 then return end
-	
-	-- Get targets
-	local targets = getTargets()
-	if #targets == 0 then return end
-	
-	-- Attack all targets with all tools
-	for _, toolData in ipairs(ToolsCache) do
-		for _, target in ipairs(targets) do
-			attackTool(toolData, target)
+	if now - lastAura < AURA_RATE then return end
+	lastAura = now
+
+	local target = getTarget()
+	if not target then return end
+
+	local partsToHit = getExpandedParts(target)
+	if #partsToHit == 0 or #toolParts == 0 or not fireTouch then return end
+
+	for i = 1, #toolParts do
+		local part = toolParts[i]
+		if part and part.Parent then
+			for j = 1, #partsToHit do
+				local enemyPart = partsToHit[j]
+				if enemyPart and enemyPart.Parent then
+					for _ = 1, TOUCH_BURST do
+						pcall(fireTouch, part, enemyPart, 0)
+						pcall(fireTouch, part, enemyPart, 1)
+					end
+				end
+			end
 		end
 	end
 end)
 
--- Character events
-LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-LocalPlayer.CharacterRemoving:Connect(onCharacterRemoving)
-
--- Initial tool refresh
-refreshTools()
-
-print("[TFL Kill Aura] Loaded - Proximity damage active (optimized)")
+print("[Kill Aura] CIPHER // KILL AURA V4.1 Loaded (Always Active // Headless).")
