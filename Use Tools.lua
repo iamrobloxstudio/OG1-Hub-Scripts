@@ -1,8 +1,8 @@
 --!strict
 -- ================================================================
--- ⚡ CIPHER // USE TOOLS V4.2 (STANDALONE SSS EDITION)
--- Simultaneous Multi-Tool Equipper & Steady High-Rate Activation Engine
--- Multi-Weapon Concurrency (MAX_TOOLS) | Zero Ping-Spike Cadence Pacer
+-- ⚡ CIPHER // USE TOOLS V4.3 (STANDALONE SSS EDITION)
+-- Persistent Respawn Multi-Tool Equipper & Steady Activation Spam
+-- Instant Respawn Tool Acquisition Loop | Zero Ping-Spike Cadence Pacer
 -- Anti-Snag 1v1 Escape Physics | Draggable SSS Red Cyber Hacker UI
 -- ================================================================
 
@@ -42,7 +42,7 @@ local TOUCH_ASSIST_SQ: number    = TOUCH_ASSIST_RANGE * TOUCH_ASSIST_RANGE
 
 -- Modes: "Normal" (Activate only), "Event" (FightEvent only), "Max" (Both with steady 25 APS)
 local Mode: string               = "Normal"
-local Active: boolean            = false
+local Active: boolean            = true -- Persists across respawns by default
 
 -- State - cached references for zero GC overhead
 local ToolsCache: { Tool }       = {}
@@ -51,6 +51,7 @@ local CurrentRoot: BasePart?     = nil
 local LastPulse: number          = 0
 local CharacterConnections: { RBXScriptConnection } = {}
 local ReequipToken: number       = 0
+local isEquipLoopRunning: boolean = false
 
 -- Pre-allocated tables to reduce GC pressure
 local TargetPartsBuffer: { BasePart } = {}
@@ -106,7 +107,7 @@ end
 -- ================================================================
 local function cacheTools()
 	table.clear(TempToolsBuffer)
-	local char = CurrentCharacter
+	local char = CurrentCharacter or LocalPlayer.Character
 	if not char then return end
 
 	for _, child in ipairs(char:GetChildren()) do
@@ -124,53 +125,91 @@ local function cacheTools()
 end
 
 -- ================================================================
--- 5. SIMULTANEOUS MULTI-TOOL CONCURRENCY ENGINE
+-- 5. INSTANT RESPAWN EQUIP LOOP (PERSISTENT 1V1 SYNERGY)
 -- ================================================================
--- Enforces that exactly MAX_TOOLS are equipped at the exact same time
-local function syncEquippedTools()
+-- Runs a tight frame-by-frame polling loop on respawn until MAX_TOOLS are equipped, then terminates.
+local function runFastEquipLoop()
 	if not Active then return end
-	local char = CurrentCharacter
-	if not char then return end
+	if isEquipLoopRunning then return end
+	isEquipLoopRunning = true
 
-	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-	if not backpack then return end
+	ReequipToken += 1
+	local myToken = ReequipToken
 
-	local hum = char:FindFirstChildOfClass("Humanoid")
-	if not hum or hum.Health <= 0 then return end
+	task.spawn(function()
+		local startTime = os.clock()
+		local maxTimeout = 2.0 -- Max 2 seconds failsafe
 
-	-- 1. Scan currently equipped tools in character
-	local equippedTools: { Tool } = {}
-	for _, child in ipairs(char:GetChildren()) do
-		if child:IsA("Tool") then
-			table.insert(equippedTools, child)
-		end
-	end
+		while Active and (ReequipToken == myToken) and (os.clock() - startTime < maxTimeout) do
+			local char = LocalPlayer.Character or CurrentCharacter
+			local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
 
-	local count = #equippedTools
+			if char and backpack then
+				local hum = char:FindFirstChildOfClass("Humanoid")
+				if hum and hum.Health > 0 then
+					-- Count tools currently in character
+					local currentEquipped: { Tool } = {}
+					for _, c in ipairs(char:GetChildren()) do
+						if c:IsA("Tool") then
+							table.insert(currentEquipped, c)
+							sanitizeToolPhysics(c)
+						end
+					end
 
-	-- 2. If more tools than MAX_TOOLS, unequip excess to backpack
-	if count > MAX_TOOLS then
-		for i = MAX_TOOLS + 1, count do
-			local tool = equippedTools[i]
-			if tool and tool.Parent == char then
-				tool.Parent = backpack
+					local count = #currentEquipped
+
+					-- Equip missing weapons from backpack simultaneously
+					if count < MAX_TOOLS then
+						local needed = MAX_TOOLS - count
+						for _, tool in ipairs(backpack:GetChildren()) do
+							if tool:IsA("Tool") then
+								sanitizeToolPhysics(tool)
+								-- Direct parenting allows simultaneous multi-tool equipping
+								tool.Parent = char
+								count += 1
+								needed -= 1
+								if needed <= 0 then break end
+							end
+						end
+					elseif count > MAX_TOOLS then
+						-- Unequip excess weapons back to backpack
+						for i = MAX_TOOLS + 1, count do
+							local tool = currentEquipped[i]
+							if tool and tool.Parent == char then
+								tool.Parent = backpack
+							end
+						end
+					end
+
+					cacheTools()
+
+					-- Check termination condition:
+					-- Stop loop once MAX_TOOLS are equipped, or if backpack has no more tools available
+					local backpackRemaining = 0
+					for _, t in ipairs(backpack:GetChildren()) do
+						if t:IsA("Tool") then
+							backpackRemaining += 1
+						end
+					end
+
+					if #ToolsCache >= MAX_TOOLS or (#ToolsCache > 0 and backpackRemaining == 0) then
+						-- Fully equipped! End loop immediately so zero CPU is wasted
+						break
+					end
+				end
 			end
-		end
-	-- 3. If fewer tools than MAX_TOOLS, equip tools from backpack concurrently
-	elseif count < MAX_TOOLS then
-		local needed = MAX_TOOLS - count
-		for _, tool in ipairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				sanitizeToolPhysics(tool)
-				-- Parenting directly to character allows multiple tools equipped simultaneously
-				tool.Parent = char
-				needed -= 1
-				if needed <= 0 then break end
-			end
-		end
-	end
 
-	cacheTools()
+			RunService.Heartbeat:Wait()
+		end
+
+		isEquipLoopRunning = false
+		cacheTools()
+	end)
+end
+
+-- Quick synchronization helper
+local function syncEquippedTools()
+	runFastEquipLoop()
 end
 
 -- ================================================================
@@ -191,7 +230,7 @@ end
 
 local function damagePulse()
 	if #ToolsCache == 0 then return end
-	local char = CurrentCharacter
+	local char = CurrentCharacter or LocalPlayer.Character
 	local root = CurrentRoot
 	if not char or not root then return end
 
@@ -318,7 +357,7 @@ HeaderTitle.Parent = Header
 local StatusDot = Instance.new("Frame")
 StatusDot.Size = UDim2.fromOffset(8, 8)
 StatusDot.Position = UDim2.new(1, -16, 0.5, -4)
-StatusDot.BackgroundColor3 = THEME.AccentDim
+StatusDot.BackgroundColor3 = THEME.ActiveGreen
 StatusDot.BorderSizePixel = 0
 StatusDot.Parent = Header
 
@@ -373,8 +412,8 @@ local function createCyberButton(text: string, height: number, order: number): T
 end
 
 -- Primary Toggle Button
-local ToggleButton = createCyberButton("STATUS: STANDBY", 32, 1)
-ToggleButton.TextColor3 = THEME.AccentRed
+local ToggleButton = createCyberButton("STATUS: ACTIVE // ONLINE", 32, 1)
+ToggleButton.TextColor3 = THEME.ActiveGreen
 
 -- Mode Button
 local ModeButton = createCyberButton("MODE: NORMAL [F]", 26, 2)
@@ -536,11 +575,10 @@ local function setState(newState: boolean)
 	updateUI()
 
 	if Active then
-		syncEquippedTools()
+		runFastEquipLoop()
 	else
 		ReequipToken += 1
-
-		local char = CurrentCharacter
+		local char = CurrentCharacter or LocalPlayer.Character
 		if char then
 			local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
 			if backpack then
@@ -591,7 +629,7 @@ ToolsMinus.MouseButton1Click:Connect(function()
 	MAX_TOOLS = math.max(1, MAX_TOOLS - 1)
 	updateUI()
 	if Active then
-		syncEquippedTools()
+		runFastEquipLoop()
 	end
 end)
 
@@ -599,7 +637,7 @@ ToolsPlus.MouseButton1Click:Connect(function()
 	MAX_TOOLS = math.min(10, MAX_TOOLS + 1)
 	updateUI()
 	if Active then
-		syncEquippedTools()
+		runFastEquipLoop()
 	end
 end)
 
@@ -614,7 +652,7 @@ track(UserInputService.InputBegan:Connect(function(input: InputObject, gpe: bool
 end))
 
 -- ================================================================
--- 9. CHARACTER BIND & INSTANT HEALTH MONITORING
+-- 9. CHARACTER BIND & PERSISTENT RESPAWN ENABLER
 -- ================================================================
 local function hookCharacter(char: Model)
 	CurrentCharacter = char
@@ -627,15 +665,17 @@ local function hookCharacter(char: Model)
 
 	local hum = char:WaitForChild("Humanoid", 5)
 	if hum and hum:IsA("Humanoid") then
+		-- Latency pre-detection
 		table.insert(CharacterConnections, hum.HealthChanged:Connect(function(hp: number)
 			if Active and hp <= 20 and hp > 0 then
-				syncEquippedTools()
+				runFastEquipLoop()
 			end
 		end))
 
 		table.insert(CharacterConnections, hum.Died:Connect(function()
+			-- Remains Active = true! Pre-queues re-equip on death
 			if Active then
-				syncEquippedTools()
+				runFastEquipLoop()
 			end
 		end))
 	end
@@ -648,25 +688,33 @@ local function hookCharacter(char: Model)
 
 	table.insert(CharacterConnections, char.ChildRemoved:Connect(function(child: Instance)
 		if child:IsA("Tool") and Active then
-			task.defer(syncEquippedTools)
+			task.defer(runFastEquipLoop)
 		end
 	end))
 
+	-- Always persistently re-equip upon respawn!
 	if Active then
-		syncEquippedTools()
+		runFastEquipLoop()
 	end
 end
 
 if LocalPlayer.Character then
 	hookCharacter(LocalPlayer.Character)
 end
-track(LocalPlayer.CharacterAdded:Connect(hookCharacter))
+
+-- Persistent CharacterAdded hook: immediately triggers the instant equip loop
+track(LocalPlayer.CharacterAdded:Connect(function(char: Model)
+	hookCharacter(char)
+	if Active then
+		runFastEquipLoop()
+	end
+end))
 
 local function bindBackpack(backpack: Backpack?)
 	if not backpack then return end
 	track(backpack.ChildAdded:Connect(function(child: Instance)
 		if child:IsA("Tool") and Active then
-			task.defer(syncEquippedTools)
+			task.defer(runFastEquipLoop)
 		end
 	end))
 end
@@ -676,7 +724,7 @@ track(LocalPlayer.ChildAdded:Connect(function(child: Instance)
 	if child:IsA("Backpack") then
 		bindBackpack(child :: Backpack)
 		if Active then
-			syncEquippedTools()
+			runFastEquipLoop()
 		end
 	end
 end))
@@ -695,20 +743,22 @@ track(RunService.PreSimulation:Connect(function()
 	if now - LastPulse < pulseInterval then return end
 	LastPulse = now
 
-	local char = CurrentCharacter
+	local char = CurrentCharacter or LocalPlayer.Character
 	if not char then return end
 
-	-- Continuously verify that the exact MAX_TOOLS count is equipped
-	if #ToolsCache ~= MAX_TOOLS then
-		syncEquippedTools()
+	-- If tools are missing, trigger fast equip loop
+	if #ToolsCache < MAX_TOOLS and not isEquipLoopRunning then
+		runFastEquipLoop()
 	else
 		cacheTools()
 	end
 
+	-- Instant spam execution across all equipped tools
 	if #ToolsCache > 0 then
 		damagePulse()
 	end
 end))
 
 updateUI()
-print("[Use Tools] CIPHER // USE TOOLS V4.2 Loaded successfully (Max Weapons Simultaneous Equipper).")
+runFastEquipLoop()
+print("[Use Tools] CIPHER // USE TOOLS V4.3 Loaded (Persistent Respawn 1v1 Edition).")
