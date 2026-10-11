@@ -1,487 +1,158 @@
--- TFL Tool Grabber V9
--- Instant tool acquisition with optimized parallel pad touching
--- OPTIMIZED: Reduced thread spawning, better connection management
+--!strict
+-- ================================================================
+-- ⚡ CIPHER // TOOL GRABBER V4.1 (HEADLESS ALWAYS-ON)
+-- Low-CPU Tycoon Gear Giver Rapid Touch Engine
+-- High MS Ping Double-Tap Replication | Headless // Always Active
+-- ================================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
 
-local LocalPlayer = Players.LocalPlayer
-local Tycoons = workspace:WaitForChild("Tycoons", 10)
+local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 
-if not Tycoons then
-	warn("[TFLToolGrabber] workspace.Tycoons was not found.")
+local GRAB_RATE: number = 1 / 25 -- 25Hz throttled loop: ultra-low CPU, zero FPS hit
+local Active: boolean   = true
+
+-- Modern Fire Touch Interest Resolver
+local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest 
+	or (getgenv and (getgenv().firetouchinterest or getgenv().fire_touch_interest))
+	or (syn and syn.firetouchinterest)
+
+if not fireTouch then
+	warn("[Tool Grabber] FireTouchInterest executor closure not found. Aborting execution.")
 	return
 end
 
--- TFL Theme
-local THEME = {
-	Accent = Color3.fromRGB(0, 255, 0),
-	Panel = Color3.fromRGB(10, 26, 10),
-	Background = Color3.fromRGB(0, 0, 0),
-	Button = Color3.fromRGB(0, 0, 0),
-	Text = Color3.fromRGB(0, 255, 0),
-	Muted = Color3.fromRGB(140, 180, 140),
-	On = Color3.fromRGB(0, 40, 0)
+-- ================================================================
+-- CLEANUP EXISTING GUI INSTANCES IF PRESENT
+-- ================================================================
+pcall(function()
+	local core = CoreGui
+	if core then
+		local old = core:FindFirstChild("CipherToolGrabberUI")
+		if old then old:Destroy() end
+	end
+	local pgui = LocalPlayer:FindFirstChild("PlayerGui")
+	if pgui then
+		local old = pgui:FindFirstChild("CipherToolGrabberUI")
+		if old then old:Destroy() end
+	end
+end)
+
+-- Filter Sets (Lookup maps)
+local EXCLUDED_BASES: { [string]: boolean } = {
+	["Insanity"] = true,
+	["Giant"]    = true,
+	["Dark"]     = true,
+	["Spike"]    = true,
+	["Web"]      = true,
+	["Strong"]   = true,
 }
 
--- Config
-local TOUCH_BURST = 2
-local SPAWN_TOUCH_BURST = 5
-local PAD_RANGE = 10000
-local IDLE_CHECK_INTERVAL = 0.1
-local SPAWN_FORCE_TIME = 0.55
-
-local ALLOWED_BASE_ORDER = {
-	"Stone", "Magic", "Storm", "Robotic", "Mecha",
-	"Shadow", "Hyper", "Thunder", "Void", "Frozen",
-	"Magma", "Nuclear", "Toxic", "Kong",
+local ALLOWED_BASES: { [string]: boolean } = {
+	["Stone"]   = true,
+	["Magic"]   = true,
+	["Storm"]   = true,
+	["Robotic"] = true,
 }
 
-local BASE_ALIASES = {
-	Stone = { "Stone" },
-	Magic = { "Magic" },
-	Storm = { "Storm" },
-	Robotic = { "Robotic" },
-	Mecha = { "Mecha" },
-	Shadow = { "Shadow" },
-	Hyper = { "Hyper" },
-	Thunder = { "Thunder" },
-	Void = { "Void" },
-	Frozen = { "Frozen" },
-	Magma = { "Magma" },
-	Nuclear = { "Nuclear" },
-	Toxic = { "Toxic" },
-	Kong = { "Kong" },
-}
+-- Workspace Targets
+local tycoons: Instance = Workspace:FindFirstChild("Tycoons") or Workspace
 
-local TOOL_RULES = {
-	{ Pattern = "Energy Sword", Base = "Stone" },
-	{ Pattern = "Staff", Base = "Magic" },
-	{ Pattern = "Axe", Base = "Storm" },
-	{ Pattern = "Fists", Base = "Robotic", ForceBase = true },
-	{ Pattern = "Frozen Claws", Base = "Frozen" },
-	{ Pattern = "Nuclear Claws", Base = "Nuclear" },
-	{ Pattern = "Hyper Claws", Base = "Hyper" },
-	{ Pattern = "Thunder Claws", Base = "Thunder" },
-	{ Pattern = "Toxic Claws", Base = "Toxic" },
-	{ Pattern = "Shadow Claws", Base = "Shadow" },
-	{ Pattern = "Void Claws", Base = "Void" },
-	{ Pattern = "Magma Claws", Base = "Magma" },
-	{ Pattern = "Punch", Base = "Kong" },
-	{ Pattern = "Blade Arms", Base = "Mecha" },
-}
+-- Cache Arrays
+local touchableParts: { BasePart } = {}
+local partCount: number = 0
 
-local FORCED_BASE_TOUCHES = {
-	Robotic = 4
-}
+-- Fast Part Verification & Register
+local function evaluateAndAdd(descendant: Instance)
+	if not descendant:IsA("TouchTransmitter") then return end
 
--- Cleanup
-if _G.__TFLToolGrabberCleanup then
-	pcall(_G.__TFLToolGrabberCleanup)
-end
+	local parent = descendant.Parent
+	if not (parent and parent:IsA("BasePart")) then return end
 
-local alive = true
-local connections = {}
-local characterConnections = {}
+	local gearGiver = parent.Parent
+	if not (gearGiver and string.find(gearGiver.Name, "GearGiver1", 1, true)) then return end
 
-local function disconnectList(list)
-	for _, conn in ipairs(list) do
-		if conn and conn.Connected then
-			conn:Disconnect()
-		end
-	end
-	table.clear(list)
-end
+	local baseFolder = gearGiver.Parent
+	local baseName = baseFolder and baseFolder.Name
 
-local function track(conn)
-	table.insert(connections, conn)
-	return conn
-end
+	if baseName and (ALLOWED_BASES[baseName] or not EXCLUDED_BASES[baseName]) then
+		partCount += 1
+		touchableParts[partCount] = parent
 
-local function trackCharacter(conn)
-	table.insert(characterConnections, conn)
-	return conn
-end
-
-local function cleanup()
-	alive = false
-	disconnectList(connections)
-	disconnectList(characterConnections)
-	_G.TFLToolGrabber = nil
-end
-
-_G.__TFLToolGrabberCleanup = cleanup
-
--- State
-local padsByBase = {}
-local registeredPads = {}
-local currentCharacter = nil
-local currentRoot = nil
-local acquireRunning = false
-local scheduleSerial = 0
-local lifeSerial = 0
-local baseTouchCounts = {}
-
--- Pre-allocated buffers for performance
-local TempPadsBuffer = {}
-local TempToolsBuffer = {}
-
-for _, baseName in ipairs(ALLOWED_BASE_ORDER) do
-	padsByBase[baseName] = {}
-end
-
--- Base / Pad discovery
-local function normalizeName(value)
-	return tostring(value or ""):lower():gsub("[^%w]", "")
-end
-
-local function allowedBaseFromName(name)
-	local normalized = normalizeName(name)
-	
-	for baseName, aliases in pairs(BASE_ALIASES) do
-		for _, alias in ipairs(aliases) do
-			local normalizedAlias = normalizeName(alias)
-			if normalized == normalizedAlias or normalized:find(normalizedAlias, 1, true) then
-				return baseName
-			end
-		end
-	end
-	
-	return nil
-end
-
-local function findGearGiver1Ancestor(instance)
-	local node = instance
-	
-	while node and node ~= Tycoons do
-		if node.Name == "GearGiver1" then
-			return node
-		end
-		node = node.Parent
-	end
-	
-	return nil
-end
-
-local function findAllowedBaseAncestor(instance)
-	local node = instance
-	
-	while node and node ~= Tycoons do
-		local baseName = allowedBaseFromName(node.Name)
-		if baseName then
-			return baseName, node
-		end
-		node = node.Parent
-	end
-	
-	return nil, nil
-end
-
-local function hasTouchTransmitter(part)
-	return part and part:IsA("BasePart") and part:FindFirstChildOfClass("TouchTransmitter") ~= nil
-end
-
-local function registerPad(part)
-	if not alive then return end
-	if not hasTouchTransmitter(part) then return end
-	
-	local giver = findGearGiver1Ancestor(part)
-	if not giver then return end
-	
-	local baseName = findAllowedBaseAncestor(giver.Parent)
-	if not baseName then return end
-	
-	if registeredPads[part] == baseName then
-		return
-	end
-	
-	if registeredPads[part] and registeredPads[part] ~= baseName then
-		local oldPads = padsByBase[registeredPads[part]]
-		if oldPads then
-			for i = #oldPads, 1, -1 do
-				if oldPads[i] == part then
-					table.remove(oldPads, i)
+		parent.AncestryChanged:Connect(function(_, newParent)
+			if not newParent then
+				local idx = table.find(touchableParts, parent)
+				if idx then
+					table.remove(touchableParts, idx)
+					partCount -= 1
 				end
-			end
-		end
-	end
-	
-	registeredPads[part] = baseName
-	table.insert(padsByBase[baseName], part)
-end
-
-local function scanTycoons()
-	for _, obj in ipairs(Tycoons:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			registerPad(obj)
-		end
-	end
-end
-
-scanTycoons()
-
-track(Tycoons.DescendantAdded:Connect(function(obj)
-	if obj:IsA("BasePart") then
-		task.defer(registerPad, obj)
-	elseif obj:IsA("TouchTransmitter") and obj.Parent and obj.Parent:IsA("BasePart") then
-		registerPad(obj.Parent)
-	end
-end))
-
--- Tool checks
-local function toolMatches(tool, pattern)
-	if not tool or not tool:IsA("Tool") then return false end
-	return normalizeName(tool.Name):find(normalizeName(pattern), 1, true) ~= nil
-end
-
-local function hasTool(pattern)
-	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-	
-	if backpack then
-		for _, item in ipairs(backpack:GetChildren()) do
-			if toolMatches(item, pattern) then
-				return true
-			end
-		end
-	end
-	
-	local character = currentCharacter
-	if character then
-		for _, item in ipairs(character:GetChildren()) do
-			if toolMatches(item, pattern) then
-				return true
-			end
-		end
-	end
-	
-	return false
-end
-
--- Pad picking
-local function prunePadList(baseName)
-	local pads = padsByBase[baseName]
-	if not pads then return nil end
-	
-	for i = #pads, 1, -1 do
-		local pad = pads[i]
-		if not pad or not pad.Parent or registeredPads[pad] ~= baseName then
-			if pad then
-				registeredPads[pad] = nil
-			end
-			table.remove(pads, i)
-		end
-	end
-	
-	return pads
-end
-
-local function getClosestPad(baseName)
-	local root = currentRoot
-	if not root then return nil end
-	
-	local pads = prunePadList(baseName)
-	if not pads or #pads == 0 then return nil end
-	
-	local closest = nil
-	local bestDistance = PAD_RANGE
-	
-	for _, pad in ipairs(pads) do
-		local distance = (pad.Position - root.Position).Magnitude
-		if distance < bestDistance then
-			bestDistance = distance
-			closest = pad
-		end
-	end
-	
-	return closest
-end
-
--- Touch engine - OPTIMIZED: Batched touches instead of parallel threads
-local function tapPad(root, pad, baseName, burstCount)
-	if type(firetouchinterest) ~= "function" then return end
-	if not root or not root.Parent or not pad or not pad.Parent then return end
-	
-	burstCount = burstCount or TOUCH_BURST
-	
-	pcall(function()
-		for _ = 1, burstCount do
-			firetouchinterest(root, pad, 0)
-			firetouchinterest(root, pad, 1)
-		end
-	end)
-	
-	baseTouchCounts[baseName] = (baseTouchCounts[baseName] or 0) + 1
-end
-
--- Wave builder
-local function buildWave(forceAll)
-	local wave = {}
-	local seenPads = {}
-	
-	if forceAll then
-		for _, baseName in ipairs(ALLOWED_BASE_ORDER) do
-			local pad = getClosestPad(baseName)
-			if pad and not seenPads[pad] then
-				seenPads[pad] = true
-				table.insert(wave, { Pad = pad, Base = baseName })
-			end
-		end
-		return wave
-	end
-	
-	for _, rule in ipairs(TOOL_RULES) do
-		if not hasTool(rule.Pattern) then
-			local pad = getClosestPad(rule.Base)
-			if pad and not seenPads[pad] then
-				seenPads[pad] = true
-				table.insert(wave, { Pad = pad, Base = rule.Base })
-			end
-		end
-	end
-	
-	return wave
-end
-
--- Acquisition engine
-local function acquirePass(root, wave, burstCount)
-	if not root or not root.Parent then return end
-	
-	for _, entry in ipairs(wave) do
-		tapPad(root, entry.Pad, entry.Base, burstCount)
-	end
-end
-
--- OPTIMIZED: Single-threaded burst with immediate execution
-local function runInstantRespawnBurst(character)
-	local myChar = character or currentCharacter or LocalPlayer.Character
-	if not myChar then return end
-	
-	local root = myChar:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-	
-	currentRoot = root
-	
-	local wave = buildWave(true)
-	acquirePass(root, wave, SPAWN_TOUCH_BURST)
-	
-	-- Additional touches in same frame for speed (no thread spawning)
-	for _, entry in ipairs(wave) do
-		tapPad(root, entry.Pad, entry.Base, SPAWN_TOUCH_BURST)
-	end
-end
-
--- Character / Backpack tracking
-local function bindCharacter(character)
-	disconnectList(characterConnections)
-	
-	currentCharacter = character
-	currentRoot = nil
-	lifeSerial = lifeSerial + 1
-	
-	if not character then return end
-	
-	runInstantRespawnBurst(character)
-	
-	character.ChildAdded:Connect(function(child)
-		if child:IsA("BasePart") then
-			currentRoot = child
-			runInstantRespawnBurst(character)
-		elseif child:IsA("Tool") then
-			-- Use task.defer for immediate but non-blocking
-			task.defer(function()
-				local root = currentRoot or character:FindFirstChild("HumanoidRootPart")
-				if root then
-					local wave = buildWave()
-					acquirePass(root, wave, SPAWN_TOUCH_BURST)
-				end
-			end)
-		end
-	end)
-	
-	character.ChildRemoved:Connect(function(child)
-		if child == currentRoot then
-			currentRoot = nil
-		end
-	end)
-	
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if root then
-		currentRoot = root
-		runInstantRespawnBurst(character)
-	else
-		local myLife = lifeSerial
-		task.defer(function()
-			if not alive or myLife ~= lifeSerial then return end
-			local waitedRoot = character:WaitForChild("HumanoidRootPart", 5)
-			if waitedRoot then
-				currentRoot = waitedRoot
-				runInstantRespawnBurst(character)
 			end
 		end)
 	end
 end
 
-local function bindBackpack()
-	local backpack = LocalPlayer:FindFirstChildOfClass("Backpack") or LocalPlayer:WaitForChild("Backpack", 5)
-	if not backpack then return end
-	
-	backpack.ChildAdded:Connect(function(child)
-		if child:IsA("Tool") then
-			task.defer(function()
-				local root = currentRoot or LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				if root then
-					local wave = buildWave()
-					acquirePass(root, wave, SPAWN_TOUCH_BURST)
-				end
-			end)
-		end
-	end)
+for _, inst in ipairs(tycoons:GetDescendants()) do
+	evaluateAndAdd(inst)
 end
 
-track(LocalPlayer.CharacterAdded:Connect(bindCharacter))
-track(LocalPlayer.CharacterRemoving:Connect(function(character)
-	if character == currentCharacter then
-		currentCharacter = nil
-		currentRoot = nil
-	end
-end))
+tycoons.DescendantAdded:Connect(evaluateAndAdd)
 
-bindBackpack()
+-- Cache Character Root
+local currentRoot: BasePart? = nil
+
+local function updateCharacterRoot(character: Model)
+	currentRoot = (character:WaitForChild("HumanoidRootPart", 5) 
+		or character:FindFirstChildWhichIsA("BasePart")) :: BasePart?
+end
 
 if LocalPlayer.Character then
-	bindCharacter(LocalPlayer.Character)
-else
-	runInstantRespawnBurst()
+	updateCharacterRoot(LocalPlayer.Character)
 end
 
--- Low-cost idle safety loop
-task.spawn(function()
-	while alive do
-		task.wait(IDLE_CHECK_INTERVAL)
-		local root = currentRoot or LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-		if root then
-			local wave = buildWave()
-			acquirePass(root, wave, TOUCH_BURST)
+LocalPlayer.CharacterAdded:Connect(updateCharacterRoot)
+LocalPlayer.CharacterRemoving:Connect(function()
+	currentRoot = nil
+end)
+
+-- ================================================================
+-- OPTIMIZED TOUCH ENGINE (THROTTLED & LATENCY COMPENSATED)
+-- ================================================================
+local function fireAllTouches()
+	if not Active then return end
+	local root = currentRoot
+	if not (root and root.Parent) then return end
+
+	for i = 1, partCount do
+		local targetPart = touchableParts[i]
+		if targetPart and targetPart.Parent and fireTouch then
+			-- Double-tap 0 and 1 for ping replication
+			pcall(fireTouch, root, targetPart, 0)
+			pcall(fireTouch, root, targetPart, 1)
+			pcall(fireTouch, root, targetPart, 0)
+			pcall(fireTouch, root, targetPart, 1)
 		end
+	end
+end
+
+local lastGrab = 0
+
+RunService.PostSimulation:Connect(function()
+	if not Active then return end
+	local now = os.clock()
+	if now - lastGrab < GRAB_RATE then return end
+	lastGrab = now
+
+	fireAllTouches()
+end)
+
+-- Initial burst
+task.defer(function()
+	for _ = 1, 3 do
+		fireAllTouches()
 	end
 end)
 
--- API
-_G.TFLToolGrabber = {
-	Acquire = function()
-		local root = currentRoot or LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-		if root then
-			local wave = buildWave()
-			acquirePass(root, wave, SPAWN_TOUCH_BURST)
-		end
-	end,
-	Burst = function()
-		runInstantRespawnBurst()
-	end,
-	Config = {
-		TouchBurst = TOUCH_BURST,
-		SpawnTouchBurst = SPAWN_TOUCH_BURST,
-	}
-}
-
-print("[TFLToolGrabber] V9 Loaded - Instant tool acquisition (optimized)")
+print("[Tool Grabber] CIPHER // TOOL GRABBER V4.1 Loaded (Always Active // Headless).")
