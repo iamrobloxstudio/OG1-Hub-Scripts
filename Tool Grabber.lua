@@ -1,19 +1,9 @@
---!strict
--- ================================================================
--- ⚡ CIPHER // TOOL GRABBER V4.1 (HEADLESS ALWAYS-ON)
--- Low-CPU Tycoon Gear Giver Rapid Touch Engine
--- High MS Ping Double-Tap Replication | Headless // Always Active
--- ================================================================
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
-
-local GRAB_RATE: number = 1 / 25 -- 25Hz throttled loop: ultra-low CPU, zero FPS hit
-local Active: boolean   = true
 
 -- Modern Fire Touch Interest Resolver
 local fireTouch: ((BasePart, BasePart, number) -> ())? = firetouchinterest 
@@ -112,23 +102,17 @@ if LocalPlayer.Character then
 	updateCharacterRoot(LocalPlayer.Character)
 end
 
-LocalPlayer.CharacterAdded:Connect(updateCharacterRoot)
-LocalPlayer.CharacterRemoving:Connect(function()
-	currentRoot = nil
-end)
-
 -- ================================================================
--- OPTIMIZED TOUCH ENGINE (THROTTLED & LATENCY COMPENSATED)
+-- HYPER-SPEED TOUCH ENGINE (NATIVE FRAME RATE)
 -- ================================================================
 local function fireAllTouches()
-	if not Active then return end
 	local root = currentRoot
 	if not (root and root.Parent) then return end
 
 	for i = 1, partCount do
 		local targetPart = touchableParts[i]
 		if targetPart and targetPart.Parent and fireTouch then
-			-- Double-tap 0 and 1 for ping replication
+			-- Double-tap 0 and 1 states for instant server registration
 			pcall(fireTouch, root, targetPart, 0)
 			pcall(fireTouch, root, targetPart, 1)
 			pcall(fireTouch, root, targetPart, 0)
@@ -137,22 +121,28 @@ local function fireAllTouches()
 	end
 end
 
-local lastGrab = 0
+-- Runs on every single simulation frame for immediate gear grabbing
+RunService.PostSimulation:Connect(fireAllTouches)
 
-RunService.PostSimulation:Connect(function()
-	if not Active then return end
-	local now = os.clock()
-	if now - lastGrab < GRAB_RATE then return end
-	lastGrab = now
+LocalPlayer.CharacterAdded:Connect(function(char: Model)
+	updateCharacterRoot(char)
+	task.defer(function()
+		for _ = 1, 5 do
+			fireAllTouches()
+			RunService.Heartbeat:Wait()
+		end
+	end)
+end)
 
-	fireAllTouches()
+LocalPlayer.CharacterRemoving:Connect(function()
+	currentRoot = nil
 end)
 
 -- Initial burst
 task.defer(function()
-	for _ = 1, 3 do
+	for _ = 1, 5 do
 		fireAllTouches()
 	end
 end)
 
-print("[Tool Grabber] CIPHER // TOOL GRABBER V4.1 Loaded (Always Active // Headless).")
+print("[Tool Grabber] CIPHER // TOOL GRABBER V5.0 Loaded (Hyper-Speed SSS Edition).")
