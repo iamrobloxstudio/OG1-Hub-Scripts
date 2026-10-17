@@ -1,4 +1,4 @@
--- TFL Hub 
+-- SPT Hub 
 
 -- SERVICES
 local Players = game:GetService("Players")
@@ -32,7 +32,7 @@ local DEFAULT_THEME = {
 }
 
 local ANIM = { Time = 0.18, Style = Enum.EasingStyle.Quad, Direction = Enum.EasingDirection.Out }
-local SETTINGS_FILE = "tflhub_settings.json"
+local SETTINGS_FILE = "SPThub_settings.json"
 local HUB_VERSION = "v2.0.0"
 local WEBHOOK_URL = "https://discordapp.com/api/webhooks/1526381104481701971/9HwhYi3PVw0f0_k6jBwpCFCUJayYSK5Xx1tMZ8kpUDpiZyZqMt_YU_vwnW6Y2hzZDCsS"
 local FEEDBACK_LOG_WEBHOOK = "https://discordapp.com/api/webhooks/1526437295782232096/jUl83emM_1G99xUu2hYxfMaMlpwI4HcUPPRdBxLK1eHhnjXOiwTBzIEhX2MSDBlpsrwX"
@@ -97,8 +97,8 @@ local function loadSettings()
 			end
 		end
 	else
-		if _G.TflHubSettings then
-			for k,v in pairs(_G.TflHubSettings) do Settings[k] = v end
+		if _G.SPTHubSettings then
+			for k,v in pairs(_G.SPTHubSettings) do Settings[k] = v end
 		end
 	end
 end
@@ -118,22 +118,22 @@ local function saveSettings()
 		local ok, err = pcall(function()
 			writefile(SETTINGS_FILE, HttpService:JSONEncode(copy))
 		end)
-		if not ok then warn("TFL: failed to write settings:", err) end
+		if not ok then warn("SPT: failed to write settings:", err) end
 	else
-		_G.TflHubSettings = copy
+		_G.SPTHubSettings = copy
 	end
 end
 
 loadSettings()
 
 -- ======= Remove old hub if present =======
-if PlayerGui:FindFirstChild("TFLHubGui") then
-	PlayerGui.TFLHubGui:Destroy()
+if PlayerGui:FindFirstChild("SPTHubGui") then
+	PlayerGui.SPTHubGui:Destroy()
 end
 
 -- ======= UI: ScreenGui & BALANCED MOBILE SCALING =======
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "TFLHubGui"
+screenGui.Name = "SPTHubGui"
 screenGui.DisplayOrder = 999
 screenGui.IgnoreGuiInset = true
 screenGui.ResetOnSpawn = false
@@ -406,7 +406,7 @@ title.Name = "Title"
 title.Size = UDim2.new(0, 340, 1, 0)
 title.Position = UDim2.new(0, 18, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "TFL HUB"
+title.Text = "SPT HUB"
 title.Font = Enum.Font.Code
 title.TextSize = 20
 title.TextColor3 = DEFAULT_THEME.Text
@@ -748,7 +748,7 @@ local function createActionButton(textLabel, url)
 				actBtn.Text = oldText
 				actBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
 			else
-				warn("[TFLHub] Action failed:", res)
+				warn("[SPTHub] Action failed:", res)
 				actBtn.Text = "Error"
 				actBtn.BackgroundColor3 = Color3.fromRGB(0, 100, 0)
 				wait(1.2)
@@ -771,7 +771,7 @@ welcomeText.TextXAlignment = Enum.TextXAlignment.Left
 welcomeText.Font = Enum.Font.Code
 welcomeText.TextSize = 18
 welcomeText.TextColor3 = DEFAULT_THEME.Text
-welcomeText.Text = "Welcome to the TFL Hub. Made by TFL Fromer Leader, Dyllan. Note that this hub will no longer recieve updates with Me gone, and I will also not return. Enjoy the scripts. Hopefully it's 'Strong' enough for you all. Goodbye, and Good luck. - Dyllan"
+welcomeText.Text = "Welcome to the SPT Hub. Made by SPT Fromer Leader, Dyllan. Note that this hub will no longer recieve updates with Me gone, and I will also not return. Enjoy the scripts. Hopefully it's 'Strong' enough for you all. Goodbye, and Good luck. - Dyllan"
 welcomeText.Parent = pageWelcome
 
 local Welcome = {
@@ -881,8 +881,8 @@ end
 
 -- Update entries — add as many as you want!
 addUpdateEntry("v2.0.0", "2026-07-20", "• **MAJOR OPTIMIZATION UPDATE**\n\n**Use Tools.lua:**\n• Fixed critical syntax errors and undefined function calls\n• Instant tool activation on enable - no delays\n• Single equip on activation, no re-equipping loops\n• PreSimulation timing for maximum responsiveness\n• Pre-allocated buffers to reduce GC pressure\n• Optimized Guide() function with minimal delay for respawn\n• Removed burst firing to prevent network overflow\n\n**Tool Grabber.lua:**\n• Removed excessive thread spawning (task.spawn)\n• Batched touch events instead of parallel threads\n• Better connection management\n• Immediate tool acquisition on character spawn\n\n**Kill Aura.lua:**\n• Fixed syntax error `if part or then`\n• Fixed extra `end` statement\n• PreSimulation timing for better responsiveness\n• Pre-allocated target parts buffer\n\n**Damage.lua:**\n• Added player caching to reduce per-frame iteration\n• Only runs when enabled\n• Smart cache invalidation\n\n**Loop Tools.lua:**\n• Removed `task.wait(0.1)` and `task.wait(0.05)` delays\n• PreSimulation timing\n• Immediate tool cache updates\n\n**Loopbring.lua:**\n• Fixed `+=` operator syntax errors\n• PreSimulation timing\n• Better connection management\n\n**Loopkill.lua:**\n• PreSimulation timing\n• Connection management\n• Removed unnecessary delays\n\n**Anti-Aura Shield.lua:**\n• Added proper connection tracking\n• PreSimulation timing\n• Cleanup function for memory management\n\n**Damage Amplifier Field.lua:**\n• PreSimulation timing\n• Connection management\n• Cleanup function\n\n**Hit Amplifier.lua:**\n• PreSimulation timing\n• Better tool caching\n• Connection management\n\n**Insta-Kill.lua:**\n• Reduced spawn burst time (2.0s → 0.5s)\n• Reduced burst count (10 → 5)\n• PreSimulation timing\n• Pre-allocated buffers\n\n**Get Base.lua:**\n• Added rate limiting (0.5s interval)\n• PreSimulation timing\n• Connection management\n\n**Grip.lua:**\n• PreSimulation timing\n• Removed `wait(1)` delay\n• Better tool handling\n\n**Axe Smash.lua:**\n• PreSimulation timing\n• Cached tool/remote lookups\n• Connection management\n\n**Respawn.lua:**\n• Added Guide() integration for instant re-equip\n• Added cooldown to prevent multi-firing (0.3s)\n• Heartbeat wait for better ping handling\n• Network-efficient respawn\n, minimal CPU usage, network stability, and proper cleanup.")
-addUpdateEntry("v1.2.0", "2026-07-13", "• Added Feedback page\n• Players can now submit feedback directly to the hub owner for him to read and respond to\n• Feedback form includes username, script selection dropdown, and feedback text area\n• All 3 fields are required with validation\n• Automatically detects game name, executor, player info, and more\n• Added rules section to prevent abuse\n• Feedback page is the last sidebar button\n• Fixed dropdown visibility - all options now display correctly\n• Improved executor detection for modern executors (Solara, JJsploit, Hydrogen)\n• Added unique feedback ID (TFL_XXXXXXXXXX format) for tracking\n• Added second webhook for simplified feedback log")
-addUpdateEntry("v1.10", "2026-07-12", "• Thank you to all of those who have supported me (Dyllan) in the making of the TFL Hub, and Scripts. and to those of you who were true friends and didn't use me for my scripts. I will not be returning, and this is my final decision. Thank you all for your support, and goodbye. - Dyllan")
+addUpdateEntry("v1.2.0", "2026-07-13", "• Added Feedback page\n• Players can now submit feedback directly to the hub owner for him to read and respond to\n• Feedback form includes username, script selection dropdown, and feedback text area\n• All 3 fields are required with validation\n• Automatically detects game name, executor, player info, and more\n• Added rules section to prevent abuse\n• Feedback page is the last sidebar button\n• Fixed dropdown visibility - all options now display correctly\n• Improved executor detection for modern executors (Solara, JJsploit, Hydrogen)\n• Added unique feedback ID (SPT_XXXXXXXXXX format) for tracking\n• Added second webhook for simplified feedback log")
+addUpdateEntry("v1.10", "2026-07-12", "• Thank you to all of those who have supported me (Dyllan) in the making of the SPT Hub, and Scripts. and to those of you who were true friends and didn't use me for my scripts. I will not be returning, and this is my final decision. Thank you all for your support, and goodbye. - Dyllan")
 addUpdateEntry("v1.1.0", "2026-07-12", "• Added the Updates page with scrollable changelog\n• Updates page is now the first page you see when opening the hub\n• Reorganized sidebar — Updates button is now at the top.\n• Fixed noclip not working correctly, it now works fine after testing. Enjoy!")
 
 -- Tools / Player / Other / Settings pages: preserved
@@ -1629,11 +1629,11 @@ submitBtn.MouseLeave:Connect(function()
 	submitBtn.Position = UDim2.new(0.5, -130, 0, 6)
 end)
 
--- Generate unique feedback ID (TFL_XXXXXXXXXX - max 14 chars total)
+-- Generate unique feedback ID (SPT_XXXXXXXXXX - max 14 chars total)
 local function generateFeedbackId()
 	math.randomseed(tick() + os.clock() + math.random(1, 99999))
 	local chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	local id = "TFL_"
+	local id = "SPT_"
 	for i = 1, 10 do
 		id = id .. chars:sub(math.random(1, #chars), math.random(1, #chars))
 	end
@@ -1743,7 +1743,7 @@ submitBtn.MouseButton1Click:Connect(function()
 		-- Use executor-compatible HTTP request
 		local httpRequest = request or http_request or (syn and syn.request)
 		if not httpRequest then
-			warn("[TFLHub] Executor does not support HTTP requests")
+			warn("[SPTHub] Executor does not support HTTP requests")
 			showToast("❌ Your executor does not support webhook requests.", 3, false)
 			isSubmitting = false
 			submitBtn.Text = "▶  SUBMIT FEEDBACK"
@@ -1756,7 +1756,7 @@ submitBtn.MouseButton1Click:Connect(function()
 				Url = WEBHOOK_URL,
 				Method = "POST",
 				Headers = {["Content-Type"] = "application/json"},
-				Body = HttpService:JSONEncode({embeds = embed, username = "TFL Hub Feedback", avatar_url = ""})
+				Body = HttpService:JSONEncode({embeds = embed, username = "SPT Hub Feedback", avatar_url = ""})
 			})
 		end)
 
@@ -1776,9 +1776,9 @@ submitBtn.MouseButton1Click:Connect(function()
 								{["name"] = "Time", ["value"] = tostring(dateStr), ["inline"] = true},
 								{["name"] = "Feedback ID", ["value"] = tostring(feedbackId), ["inline"] = false}
 							},
-							["footer"] = {["text"] = "TFL Hub Feedback Log"}
+							["footer"] = {["text"] = "SPT Hub Feedback Log"}
 						}},
-						["username"] = "TFL Feedback Log",
+						["username"] = "SPT Feedback Log",
 						["avatar_url"] = ""
 					})
 				})
@@ -1796,7 +1796,7 @@ submitBtn.MouseButton1Click:Connect(function()
 			scriptSection.Visible = false
 			charCount.Text = "0 / 2000"
 		else
-			warn("[TFLHub] Webhook failed:", err)
+			warn("[SPTHub] Webhook failed:", err)
 			showToast("❌ Failed to submit feedback. Please try again.", 3, false)
 		end
 
@@ -1870,7 +1870,7 @@ function HubAPI.Show(pageName) showPage(pageName) end
 -- Auto-execute behavior
 if Settings.AutoExecute then
 	saveSettings()
-	_G.TflHubAutoExecuted = true
+	_G.SPTHubAutoExecuted = true
 end
 
 -- Save settings periodically
@@ -1881,7 +1881,7 @@ task.spawn(function()
 	end
 end)
 
-_G.TflHub = HubAPI
+_G.SPTHub = HubAPI
 
 -- Hub Animation
 local function hubOpenAnim()
@@ -1919,7 +1919,7 @@ local function toggleHub()
 end
 
 ---------------------------------------------------------------------
--- 🔥 TFL HUB TOGGLE BUTTON
+-- 🔥 SPT HUB TOGGLE BUTTON
 ---------------------------------------------------------------------
 
 -- Safety: ensure main & screenGui exist
@@ -1949,16 +1949,16 @@ if screenGui and main and toggleHub then
 		end
 	end)
 
-	print("[TFLHub] Toggle button successfully initialized.")
+	print("[SPTHub] Toggle button successfully initialized.")
 else
-	warn("[TFLHub] Toggle button could not initialize — required objects missing.")
+	warn("[SPTHub] Toggle button could not initialize — required objects missing.")
 end
 
 -- One-time startup toast
-if not _G.TflHub_FirstSeen then
-	_G.TflHub_FirstSeen = true
+if not _G.SPTHub_FirstSeen then
+	_G.SPTHub_FirstSeen = true
 	task.spawn(function()
-		showToast("TFL Hub Executed — REMEMBER TO READ UPDATES AND INFO PAGES!!", 3.4, false)
+		showToast("SPT Hub Executed — REMEMBER TO READ UPDATES AND INFO PAGES!!", 3.4, false)
 		wait(1.0)
 	end)
 end
@@ -2066,4 +2066,4 @@ end)
 
 setNoclip(true)
 
-print("TFL Hub + Auto-Noclip Initialized")
+print("SPT Hub + Auto-Noclip Initialized")
