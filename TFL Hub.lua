@@ -771,7 +771,7 @@ welcomeText.TextXAlignment = Enum.TextXAlignment.Left
 welcomeText.Font = Enum.Font.Code
 welcomeText.TextSize = 18
 welcomeText.TextColor3 = DEFAULT_THEME.Text
-welcomeText.Text = "Welcome to the SPT Hub. Made by SPT Fromer Leader, Dyllan. Note that this hub will no longer recieve updates with Me gone, and I will also not return. Enjoy the scripts. Hopefully it's 'Strong' enough for you all. Goodbye, and Good luck. - Dyllan"
+welcomeText.Text = "Welcome to the SPT Hub. Made by TFL Fromer Leader, Dyllan. Note that this hub will no longer recieve updates with Me gone, and I will also not return. Enjoy the scripts. Hopefully it's 'Strong' enough for you all. Goodbye, and Good luck. - Dyllan"
 welcomeText.Parent = pageWelcome
 
 local Welcome = {
